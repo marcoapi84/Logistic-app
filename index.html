@@ -1,0 +1,1570 @@
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pallettizzatore Pallet Farmaceutici v2.5.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial; }
+        .table th, .table td { border: 1px solid #e5e7eb; padding: 6px 8px; }
+        .table th { background: #eaf2ff; color: #1e3a8a; font-weight: 700; }
+        .bg-watermark { position: relative; isolation: isolate; }
+        .bg-watermark::before {
+            content: '';
+            position: fixed; inset: 0; z-index: 0;
+            background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMjAwIiBmaWxsPSJub25lIiBzdHJva2U9IiMxZTNlOGEiIHN0cm9rZS13aWR0aD0iNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIj4KICA8cGF0aCBkPSJNNTAgMTIwSDI1MFYxNjBINTB6Ii8+CiAgPHBhdGggZD0iTTI1MCAxMjBIMzIwVjgwSDI1MHoiLz4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxNjAiIHI9IjE4IiBmaWxsPSIjMWUzZThhIi8+CiAgPGNpcmNsZSBjeD0iMjIwIiBjeT0iMTYwIiByPSIxOCIgdHJhbnNmb3JtPSJtYXRyaXgoMSAwIDAgMSAwIDApIiBmaWxsPSIjMWUzZThhIi8+CiAgPGNpcmNsZSBjeD0iMzAwIiBjeT0iMTYwIiByPSIxOCIgdHJhbnNmb3JtPSJtYXRyaXgoMSAwIDAgMSAwIDApIiBmaWxsPSIjMWUzZThhIi8+Cjwvc3ZnPg==");
+            background-repeat: no-repeat; background-position: center 80%; background-size: min(60vw, 800px); opacity: 0.12; pointer-events: none;
+        }
+        #root { position: relative; z-index: 1; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- Libreria Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+</head>
+<body class="min-h-screen bg-gradient-to-b from-blue-200 to-blue-500 p-4 bg-watermark">
+    <div id="root" class="max-w-full mx-auto"></div>
+
+    <script type="text/babel">
+        const { useEffect, useMemo, useState } = React;
+
+        function TextCell({ value, onChange, placeholder, disabled = false }) {
+            const [v, setV] = useState(value || '');
+            useEffect(() => setV(value || ''), [value]);
+            return (
+                <input type="text" className="w-full h-9 border rounded px-2 text-sm" 
+                       value={v} placeholder={placeholder} disabled={disabled}
+                       onChange={e => { if (disabled) return; setV(e.target.value); onChange(e.target.value); }} />
+            );
+        }
+
+        function NumberCell({ value, onChange, placeholder, disabled = false }) {
+            const [v, setV] = useState(value || '');
+            useEffect(() => setV(value || ''), [value]);
+            return (
+                <input type="number" className="w-full h-9 border rounded px-2 text-sm" 
+                       value={v} placeholder={placeholder} disabled={disabled}
+                       onChange={e => {
+                           if (disabled) return;
+                           const raw = e.target.value;
+                           const n = raw ? (raw === '' ? null : Number(raw)) : null;
+                           setV(raw);
+                           if (raw === '') onChange(null);
+                           else if (!Number.isNaN(n)) onChange(n);
+                       }} />
+            );
+        }
+
+        const makeId = () => Math.random().toString(36).slice(2, 10);
+
+            function parseExcelPaste(text) {
+                if (!text || !text.trim()) return null;
+                const rows = text.trim().split('\n').map(r => r.split('\t'));
+                if (rows.length === 0) return null;
+                return rows;
+            }
+
+        const STORAGEKEY = 'pallettizzatore-saves-v1';
+const readSaves = () => [];
+const writeSaves = () => {};
+
+        function toInt(n) {
+            if (n == null || n === undefined || n === '') return null;
+            const x = Number(n);
+            if (!Number.isFinite(x)) return null;
+            return Math.trunc(x);
+        }
+
+        function toNum(n) {
+            if (n == null || n === undefined || n === '') return null;
+            const x = Number(n);
+            return Number.isFinite(x) ? x : null;
+        }
+
+        function validateProduct(p) {
+            const cs = toInt(p.colliStd);
+            const pc = toInt(p.pzPerCollo);
+            const psp = toInt(p.pzSpezz);
+            const pzt = toInt(p.pzTotaliProdotto);
+            const cmp = toInt(p.colliMaxPedana);
+            const npt = toInt(p.nPalletTotali);
+
+            if (!p.codice || !p.codice.trim()) return { ok: false, message: 'Codice mancante.' };
+            if (!p.descrizione || !p.descrizione.trim()) return { ok: false, message: `Descrizione mancante ${p.codice}.` };
+            if (!p.lotto || !p.lotto.trim()) return { ok: false, message: `Lotto mancante ${p.codice}.` };
+            if (cs == null || cs <= 0) return { ok: false, message: `Colli standard non validi ${p.codice}.` };
+            if (pc == null || pc <= 0) return { ok: false, message: `Pz/collo non validi ${p.codice}.` };
+            if (pzt == null || pzt <= 0) return { ok: false, message: `Pz totali prodotto mancanti ${p.codice}.` };
+            if (cmp == null || cmp <= 0) return { ok: false, message: `Colli max/pedana non validi ${p.codice}.` };
+            if (npt == null || npt <= 0) return { ok: false, message: `N. Pallet Totali non valido ${p.codice}.` };
+
+            const hasSpezz = psp != null && psp > 0;
+            const computed = cs * pc + (hasSpezz ? psp : 0);
+            if (computed !== pzt) return { ok: false, message: `Totale pezzi NON torna per ${p.codice} (calcolato:${computed}, inserito:${pzt}).` };
+
+            return { ok: true, message: `OK ${p.codice} (${computed} pezzi).` };
+        }
+
+        function buildPedaneForProduct(p, startPedanaNum) {
+            const cs = toInt(p.colliStd);
+            const pc = toInt(p.pzPerCollo);
+            const psp = toInt(p.pzSpezz);
+            const pzt = toInt(p.pzTotaliProdotto);
+            const cmp = toInt(p.colliMaxPedana);
+            const npt = toInt(p.nPalletTotali);
+            const pesoStd = toNum(p.pesoStd);
+            const altStd = toInt(p.altStd);
+            const pesoUltimaPedana = toNum(p.pesoUltimaPedana);
+            const altUltimaPedana = toInt(p.altUltimaPedana);
+
+            const hasSpezz = psp != null && psp > 0;
+            let remainingStd = cs;
+            let colloIndex = 1;
+            const pedane = [];
+
+            for (let i = 0; i < npt - 1; i++) {
+                const takeStd = Math.min(cmp, remainingStd);
+                if (takeStd <= 0) break;
+
+                const startCollo = colloIndex;
+                const endCollo = colloIndex + takeStd - 1;
+                const stdRange = { start: startCollo, end: endCollo };
+                const pzStd = takeStd * pc;
+
+                pedane.push({
+                    num: startPedanaNum + pedane.length,
+                    codice: p.codice || '',
+                    descrizione: p.descrizione || '',
+                    lotto: p.lotto || '',
+                    stdRange,
+                    spezzRange: null,
+                    pzTotPedana: pzStd,
+                    pesoKg: pesoStd,
+                    altCm: altStd
+                });
+
+                remainingStd -= takeStd;
+                colloIndex += takeStd;
+            }
+
+            if (remainingStd > 0 || hasSpezz) {
+                const takeStd = remainingStd;
+                const takeSpezz = hasSpezz ? 1 : 0;
+                const startCollo = colloIndex;
+                const endCollo = colloIndex + takeStd + takeSpezz - 1;
+
+                const stdRange = takeStd > 0 ? { start: startCollo, end: startCollo + takeStd - 1 } : null;
+                const spezzRange = takeSpezz > 0 ? { start: startCollo + takeStd, end: endCollo } : null;
+                const pzStd = takeStd * pc;
+                const pzSp = takeSpezz * psp;
+                const pzTotPedana = pzStd + pzSp;
+
+                pedane.push({
+                    num: startPedanaNum + pedane.length,
+                    codice: p.codice || '',
+                    descrizione: p.descrizione || '',
+                    lotto: p.lotto || '',
+                    stdRange,
+                    spezzRange,
+                    pzTotPedana,
+                    pesoKg: pesoUltimaPedana || pesoStd,
+                    altCm: altUltimaPedana || altStd
+                });
+            }
+
+            const sumPz = pedane.reduce((acc, x) => acc + toInt(x.pzTotPedana || 0), 0);
+            const ok = sumPz === pzt;
+            return { pedane, ok };
+        }
+
+        function PallettizzazioneApp({ onSendToRitiri, goHome, userRole }) {
+            const emptyProduct = {
+                id: makeId(),
+                codice: '',
+                descrizione: '',
+                lotto: '',
+                colliStd: null,
+                pzPerCollo: null,
+                pzSpezz: null,
+                pzTotaliProdotto: null,
+                colliMaxPedana: null,
+                nPalletTotali: null,
+                altStd: null,
+                pesoStd: null,
+                altUltimaPedana: null,
+                pesoUltimaPedana: null
+            };
+            const isReadOnly = (userRole === 'ritirista');
+            const [cliente, setCliente] = useState('');
+           const [specchietto, setSpecchietto] = useState('');
+          const [specchiettoEdit, setSpecchiettoEdit] = useState(false);
+            const [palletConclusa, setPalletConclusa] = useState(false);
+            const [products, setProducts] = useState([emptyProduct]);
+            const [savedItems, setSavedItems] = useState(readSaves());
+            const [selectedSaveId, setSelectedSaveId] = useState('');
+			const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+			useEffect(() => {
+  const channel = dbClient
+    .channel('pallettizzazioni-ritiri-sync')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'pallettizzazioni' },
+      (payload) => {
+        const updated = payload?.new;
+        if (!updated) return;
+        if (updated.inviato_a_ritiri === true || updated.inviatoaritiri === true) {
+          setSavedItems(prev =>
+            prev.filter(x =>
+              (x.name || '').toLowerCase() !== (updated.codice_cliente || updated.codicecliente || '').toLowerCase()
+            )
+          );
+        }
+      }
+    )
+  .subscribe((status) => {
+    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        setTimeout(() => channel.subscribe(), 3000);
+    }
+});
+return () => { dbClient.removeChannel(channel); };
+}, []);
+function handleHomeClick() {
+
+  if (!hasUnsavedChanges) {
+    goHome();
+    return;
+  }
+  const ok = window.confirm("Stai uscendo senza salvare. Confermi?");
+  if (ok) goHome();
+}
+
+            // localStorage non più usato come fonte primaria
+			// 🆕 Carica automaticamente da Supabase all'avvio
+useEffect(() => {
+    const loadFromSupabase = async () => {
+        try {
+            const { data, error } = await dbClient
+                .from('pallettizzazioni')
+                .select('dati_completi, codice_cliente')
+				.eq('inviato_a_ritiri', false)
+                .order('created_at', { ascending: false })
+                .limit(100); // Carica le ultime 100
+
+            if (error) {
+                console.error('❌ Errore caricamento Supabase:', error);
+                return;
+            }
+console.log('DATI DA SUPABASE:', JSON.stringify(data));
+
+            if (data && data.length > 0) {
+                // Aggiungi i dati caricati all'archivio locale
+                const loadedItems = data.map(item => {
+                    const snapshot = item.dati_completi;
+                    return {
+                        id: snapshot.id || makeId(),
+                        name: item.codice_cliente || snapshot.name || snapshot.cliente || 'Senza nome',
+                        updatedAt: snapshot.updatedAt || new Date().toISOString(),
+                                    cliente: snapshot.cliente || snapshot.name || '',
+            products: snapshot.products || [],
+            specchietto: snapshot.specchietto || ''
+        };
+                });
+
+                // Fonte unica: solo Supabase
+setSavedItems(loadedItems);
+
+                console.log('✅ Caricati', data.length, 'salvataggi da Supabase');
+            }
+        } catch (err) {
+            console.error('❌ Errore connessione Supabase:', err);
+        }
+    };
+
+    loadFromSupabase();
+}, []); // [] = esegui solo all'avvio
+
+
+            const updateProduct = (id, patch) =>
+                setProducts(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+
+            const addRow = () => setProducts(prev => [...prev, { ...emptyProduct, id: makeId() }]);
+            const removeRow = id => setProducts(prev => prev.length === 1 ? [prev[0]] : prev.filter(p => p.id !== id));
+
+            const normalizeProducts = arr => {
+                const base = Array.isArray(arr) ? arr : [];
+                return base.map(p => ({ ...p, id: p.id || makeId() }));
+            };
+
+            const saveOverwrite = async () => {
+    const name = cliente.trim();
+    if (!name) { alert('Prima inserisci il Cliente (serve come nome del salvataggio).'); return; }
+    
+    const snapshot = { 
+        id: makeId(), 
+        name, 
+        updatedAt: new Date().toISOString(), 
+        cliente: name, 
+        products,
+        specchietto		
+    };
+    setHasUnsavedChanges(false);
+    // Salva nel localStorage (come prima)
+    setSavedItems(prev => {
+        const filtered = prev.filter(x => (x.name || '').toLowerCase() !== name.toLowerCase());
+        return [snapshot, ...filtered];
+    });
+    setSelectedSaveId(snapshot.id);
+    
+    // 🆕 SALVA ANCHE SU SUPABASE
+    try {
+        const { data, error } = await dbClient
+            .from('pallettizzazioni')
+            .upsert({
+    codice_cliente: snapshot.name,
+    n_ordine: snapshot.name || 'N/A',
+    n_colli: snapshot.items?.length || 0,
+    peso_kg: snapshot.totalWeight || 0,
+    concluso: false,
+    inviato_a_ritiri: false,
+    dati_completi: snapshot
+}, { onConflict: 'codice_cliente' });
+        
+        if (error) {
+            console.error('❌ Errore Supabase:', error);
+            alert(`Salvato localmente, ma errore su database: ${error.message}`);
+        } else {
+            console.log('✅ Salvato su Supabase!', data);
+            alert(`✅ Salvataggio completo: "${name}" (locale + database)`);
+        }
+    } catch (err) {
+        console.error('❌ Errore connessione:', err);
+        alert(`Salvato localmente. Errore database: ${err.message}`);
+    }
+};
+
+
+            const loadSelected = () => {
+                const item = savedItems.find(x => x.id === selectedSaveId);
+                if (!item) { alert('Seleziona un salvataggio da caricare.'); return; }
+                setCliente(item.cliente || item.name);
+              setProducts(normalizeProducts(item.products));
+              setSpecchietto(item.specchietto || '');
+              alert('Caricato: ' + item.name);
+            }; //
+          const refreshFromSupabase = async () => {
+    try {
+        const { data, error } = await dbClient
+            .from('pallettizzazioni')
+.select('dati_completi, codice_cliente')
+.eq('inviato_a_ritiri', false)
+.order('created_at', { ascending: false })
+.limit(100);
+
+        if (error) {
+            alert('Errore nel refresh da Supabase: ' + error.message);
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            alert('Nessun dato trovato su Supabase.');
+            return;
+        }
+
+        // Ricostruisce l'intero archivio da Supabase
+const loadedItems = data.map(item => {
+    const snapshot = item.dati_completi;
+    return {
+        id: snapshot?.id || makeId(),
+        name: item.codice_cliente || snapshot?.name || snapshot?.cliente || 'Senza nome',
+        updatedAt: new Date().toISOString(),
+        cliente: snapshot?.cliente || snapshot?.name || '',
+        products: snapshot?.products || [],
+        specchietto: snapshot?.specchietto || ''
+    };
+});
+setSavedItems(loadedItems);
+
+// 🆕 Se il cliente a schermo esiste ancora, aggiorna i dati visualizzati
+setCliente(prev => {
+    const exists = loadedItems.some(x => x.name.toLowerCase() === prev.trim().toLowerCase());
+    if (!exists && prev.trim() !== '') {
+        // Cliente eliminato → pulisce tutto
+        setProducts([{...emptyProduct, id: makeId()}]);
+        setSpecchietto('');
+        setSelectedSaveId(null);
+        return '';
+    }
+    if (exists && prev.trim() !== '') {
+        // Cliente modificato → aggiorna i dati a schermo
+        const updated = loadedItems.find(x => x.name.toLowerCase() === prev.trim().toLowerCase());
+        setProducts(normalizeProducts(updated.products || []));
+        setSpecchietto(updated.specchietto || '');
+    }
+    return prev;
+});
+
+alert('✅ Dati aggiornati da Supabase!');
+return;
+        
+     
+    } catch (err) {
+        alert('Errore di connessione nel refresh: ' + err.message);
+    }
+};
+
+
+            const deleteSelected = async () => {
+  if (!selectedSaveId) { alert('Seleziona un salvataggio da eliminare.'); return; }
+  const item = savedItems.find(x => x.id === selectedSaveId);
+  if (!item) return;
+  if (!confirm(`Vuoi eliminare il salvataggio "${item.name}"?`)) return;
+
+  setSavedItems(prev => prev.filter(x => x.name.toLowerCase() !== cliente.trim().toLowerCase()));
+
+  // 2. Rimuove anche da Supabase
+  try {
+    const { error } = await dbClient
+      .from('pallettizzazioni')
+      .delete()
+      .eq('codice_cliente', item.name);
+    if (error) console.error('Errore eliminazione Supabase:', error);
+  } catch(e) {
+    console.error('Errore connessione eliminazione:', e);
+  }
+};
+
+ 
+			const validationSummary = useMemo(() => {
+                const messages = [];
+                let okCount = 0;
+                for (const p of products) {
+                    const anyFilled = (p.codice || '').trim() || (p.descrizione || '').trim() || (p.lotto || '').trim() ||
+                        p.colliStd != null || p.pzPerCollo != null || p.pzSpezz != null || 
+                        p.pzTotaliProdotto != null || p.colliMaxPedana != null || p.nPalletTotali != null;
+                    if (!anyFilled) continue;
+
+                    const v = validateProduct(p);
+                    if (v.ok) okCount++;
+                    else messages.push(v.message);
+                }
+                const anyRowFilled = products.some(p =>
+                    (p.codice || '').trim() || (p.descrizione || '').trim() || (p.lotto || '').trim() ||
+                    p.colliStd != null || p.pzPerCollo != null || p.pzSpezz != null || 
+                    p.pzTotaliProdotto != null || p.colliMaxPedana != null || p.nPalletTotali != null);
+                if (!anyRowFilled) return { ok: false, message: 'Compila almeno una riga prodotto.', products };
+                if (messages.length > 0)
+                    return { ok: false, message: `${messages[0]}${messages.length > 1 ? ` + ${messages.length - 1} altri errori` : ''}`, products };
+                return { ok: okCount > 0, message: `OK (${okCount} prodotto${okCount === 1 ? '' : 'i'} validi).`, products };
+            }, [products]);
+
+            const computed = useMemo(() => {
+                const perProduct = [];
+                let nextPedana = 1;
+                let sumPeso = 0;
+                let sumPezzi = 0;
+                let sumColli = 0;
+
+                for (const p of products) {
+                    const anyFilled = (p.codice || '').trim() || (p.descrizione || '').trim() || (p.lotto || '').trim() ||
+                        p.colliStd != null || p.pzPerCollo != null || p.pzSpezz != null || 
+                        p.pzTotaliProdotto != null || p.colliMaxPedana != null || p.nPalletTotali != null;
+                    if (!anyFilled) continue;
+
+                    const v = validateProduct(p);
+                    if (!v.ok) continue;
+
+                    const built = buildPedaneForProduct(p, nextPedana);
+                    if (!built.ok) continue;
+
+                    const pc = toInt(p.pzPerCollo);
+                    const psp = toInt(p.pzSpezz);
+                    const pedane = built.pedane.map(ped => {
+                        const base = `PEDANA ${ped.num} - ${ped.codice} ${ped.descrizione} ${ped.lotto}`;
+                        const parts = [];
+                        if (ped.stdRange) parts.push(`COLLI DA ${ped.stdRange.start} A ${ped.stdRange.end} X ${pc}`);
+                        if (ped.spezzRange) {
+                            const spezzCount = ped.spezzRange.end - ped.spezzRange.start + 1;
+                            if (spezzCount === 1) parts.push(`COLLO ${ped.spezzRange.start} X ${psp}`);
+                            else parts.push(`COLLI DA ${ped.spezzRange.start} A ${ped.spezzRange.end} X ${psp}`);
+                        }
+                        const line = `${base} ${parts.join(' + ')} PEZZI ${ped.pzTotPedana}.` +
+                            (ped.pesoKg != null && ped.pesoKg !== undefined ? ` PESO ${ped.pesoKg} KG.` : '') +
+                            (ped.altCm != null && ped.altCm !== undefined ? ` ALT ${ped.altCm} CM.` : '');
+                        return { ...ped, mailLine: line.trim() };
+                    });
+
+                    perProduct.push({ product: p, pedane });
+                    nextPedana += pedane.length;
+                    sumPezzi += toInt(p.pzTotaliProdotto || 0);
+                    sumPeso += pedane.reduce((acc, ped) => acc + toNum(ped.pesoKg || 0), 0);
+                    const cs = toInt(p.colliStd || 0);
+                    const hasSpezz = toInt(p.pzSpezz) != null && toInt(p.pzSpezz) > 0;
+                    sumColli += cs + (hasSpezz ? 1 : 0);
+                }
+                const sumPedane = perProduct.reduce((acc, x) => acc + x.pedane.length, 0);
+                return { perProduct, totals: { pedane: sumPedane, pesoKg: sumPeso, colli: sumColli, pezzi: sumPezzi } };
+            }, [products]);
+
+            const canOutput = validationSummary.ok && computed.totals.pedane > 0;
+
+            const mailText = useMemo(() => {
+                if (!canOutput) return '';
+                const blocks = [];
+                if (cliente.trim()) blocks.push(`CLIENTE ${cliente.trim()}`);
+                for (const item of computed.perProduct) {
+                    const p = item.product;
+                    const cs = toInt(p.colliStd);
+                    const pc = toInt(p.pzPerCollo);
+                    const psp = toInt(p.pzSpezz);
+                    const pzt = toInt(p.pzTotaliProdotto);
+                    const hasSpezz = psp != null && psp > 0;
+                    const header = `${p.codice} ${p.descrizione} ${p.lotto} COLLI ${cs} X ${pc}${hasSpezz ? ` + 1 X ${psp}` : ''} PEZZI ${pzt}.${p.noteRiga ? ` ${p.noteRiga}` : ''}`;
+                    blocks.push(header);
+                    blocks.push(item.pedane.map(x => x.mailLine).join('\n'));
+                    blocks.push('');
+                }
+                return blocks.join('\n');
+            }, [canOutput, computed.perProduct, cliente]);
+
+            const mailTextWithTotals = useMemo(() => {
+                if (!canOutput) return '';
+                const t = computed.totals;
+                const totalsBlock = [
+                    '',
+                    'TOTALI',
+                    `Somma pedane tutti i prodotti: ${t.pedane}`,
+                    `Somma peso tutte pedane: ${t.pesoKg} KG`,
+                    `Somma colli tutti i prodotti: ${t.colli}`,
+                    `Somma pezzi tutti i prodotti: ${t.pezzi}`,
+                ].join('\n');
+                return mailText.trim() + '\n' + totalsBlock;
+            }, [canOutput, mailText, computed.totals]);
+
+            const copyMail = async () => {
+                try {
+                    await navigator.clipboard.writeText(mailTextWithTotals);
+                    alert('Testo con Totali copiato negli appunti!');
+                } catch {
+                    alert('Impossibile copiare automaticamente. Seleziona e copia manualmente.');
+                }
+            };
+
+            const resetAll = () => {
+    setCliente('');
+    setProducts([{...emptyProduct}]);
+    setSpecchietto('');
+    setPalletConclusa(false);
+    setSelectedSaveId('');
+    setHasUnsavedChanges(false);
+}
+ 
+            return (
+                <div className="space-y-5">
+                    <div className="flex flex-col md:flex-row gap-3 items-start">
+                        <div className="bg-white/70 border border-blue-200 rounded-lg p-3 shadow-sm w-full md:w-80">
+                            <div className="text-sm font-semibold text-blue-900 mb-1">Cliente</div>
+                            <TextCell
+  value={cliente}
+  onChange={(v) => { setCliente(v); setHasUnsavedChanges(true); }}
+  placeholder="Inserisci cliente (nome salvataggio)"
+  disabled={palletConclusa}
+/>
+                            <div className="hidden text-xs text-blue-900/70 mt-1">Il salvataggio usa esattamente questo nome (es. CLIENTE, CLIENTE 2, ...).</div>
+                        </div>
+                        <div className="bg-white/70 border border-blue-200 rounded-lg p-3 shadow-sm w-full md:flex-1 no-print">
+                            <div className="text-sm font-semibold text-blue-900 mb-2">Archivio pallettizzazioni</div>
+                            <div className="flex flex-col md:flex-row gap-2 md:items-center">
+                                <select className="h-9 border rounded px-2 text-sm w-full md:w-80" value={selectedSaveId}
+                                        onChange={e => setSelectedSaveId(e.target.value)}>
+                                    <option value="">-- Seleziona un salvataggio --</option>
+                                    {savedItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                                <div className="flex flex-wrap gap-2">
+                                    <button className="h-9 px-3 rounded bg-emerald-600 text-white shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={saveOverwrite} disabled={isReadOnly}>Salva/sovrascrivi</button>
+									<button 
+    className="h-9 px-3 rounded bg-sky-600 text-white shadow hover:bg-sky-700" 
+    onClick={refreshFromSupabase}
+>
+    🔄 Refresh
+</button>
+
+                                    <button className="h-9 px-3 rounded shadow text-white" 
+                                            style={selectedSaveId ? { background: '#2563eb' } : { background: '#9ca3af', cursor: 'not-allowed' }}
+                                            onClick={loadSelected} disabled={!selectedSaveId}>Carica</button>
+                                    <button className="h-9 px-3 rounded shadow text-white" 
+        style={(selectedSaveId && !isReadOnly) ? { background: '#dc2626' } : { background: '#9ca3af', cursor: 'not-allowed' }}
+        onClick={deleteSelected} disabled={!selectedSaveId || isReadOnly}>Elimina</button>
+                                </div>
+                            </div>
+                            <div className="hidden text-xs text-gray-600 mt-2">Nota: i salvataggi restano su questo PC/browser (localStorage).</div>
+                        </div>
+                    </div>
+
+                    <div className="w-full">
+                         {(() => {
+                            const parsed = parseExcelPaste(specchietto);
+                            const isTable = parsed && parsed.length > 0 && parsed[0].length > 1;
+                            return isTable && !specchiettoEdit ? (
+                              <div className="overflow-x-auto border border-blue-200 rounded-lg shadow-sm cursor-pointer" onClick={() => setSpecchiettoEdit(true)} title="Clicca per modificare">
+                                <table className="table w-full text-sm">
+                                  <tbody>
+                                    {parsed.map((row, i) => (
+                                      <tr key={i} className={i === 0 ? "bg-blue-50 font-semibold" : "hover:bg-blue-50/40"}>
+                                        {row.map((cell, j) => (
+                                          <td key={j} className="border border-blue-100 px-2 py-1 whitespace-nowrap">{cell}</td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div>
+                                <textarea
+                                  className={"w-full p-2 border border-blue-200 rounded-lg text-sm font-mono shadow-sm resize-y bg-white"}
+                                  style={{minHeight: '80px', whiteSpace: 'pre'}}
+                                  placeholder={userRole === 'ufficio' ? "Incolla qui i dati dal foglio Excel (es. tabella ordine)..." : ""}
+                                  value={specchietto}
+                                  onChange={e => { setSpecchietto(e.target.value); setHasUnsavedChanges(true); }}
+                                  onBlur={() => setSpecchiettoEdit(false)}
+                                  onFocus={() => setSpecchiettoEdit(true)}
+                                />
+                                {userRole === 'ufficio' && (
+                                  <div className="text-xs text-blue-600 mt-1">Clicca nel riquadro per modificare, clicca fuori per vedere la tabella.</div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                    <div className={`rounded-lg border p-3 ${validationSummary.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                        <div className="font-semibold" style={{ color: validationSummary.ok ? '#166534' : '#dc2626' }}>
+                            {validationSummary.ok ? '✅ Controllo totale pezzi OK' : '❌ Controllo totale pezzi ERRORE'}
+                        </div>
+                        <div className="text-sm" style={{ color: validationSummary.ok ? '#15803d' : '#dc2626' }}>
+                            {validationSummary.message}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-xl border border-blue-100 overflow-x-auto">
+                        <table className="table w-full text-sm">
+                            <thead>
+                                <tr>
+                                    <th style={{width:'90px'}}>Codice</th><th style={{minWidth:'180px'}}>Descrizione</th><th style={{width:'90px'}}>Lotto</th><th style={{width:'75px'}}>Colli TOT</th><th style={{width:'75px'}}>Pz/collo</th>
+                                    <th style={{width:'75px'}}>Pz spezz</th><th style={{width:'95px'}}>Pz totali prodotto</th><th style={{width:'80px', maxWidth:'80px', overflow:'hidden'}}>Colli pedana</th><th style={{width:'65px'}}>N. Pallet Totali</th>
+                                    <th style={{width:'75px'}}>Alt. std cm</th><th style={{width:'75px'}}>Peso std kg</th><th style={{width:'75px'}}>Alt. ultima pedana cm</th><th style={{width:'75px'}}>Peso ultima pedana kg</th><th style={{minWidth:'200px'}}>Note</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {products.map((p, idx) => (
+                                    <React.Fragment key={p.id}>
+                                        <tr className="hover:bg-blue-50/40">
+                                            <td><TextCell disabled={palletConclusa || isReadOnly} value={p.codice} onChange={(v) => { updateProduct(p.id, { codice: v }); setHasUnsavedChanges(true); }} /></td>
+                                            <td><TextCell disabled={palletConclusa || isReadOnly} value={p.descrizione} onChange={(v) => { updateProduct(p.id, { descrizione: v }); setHasUnsavedChanges(true); }} /></td>
+                                            <td><TextCell disabled={palletConclusa || isReadOnly} value={p.lotto} onChange={(v) => { updateProduct(p.id, { lotto: v }); setHasUnsavedChanges(true); }} /></td>
+                                            <td><NumberCell disabled={palletConclusa || isReadOnly} value={p.colliStd} onChange={(v) => { updateProduct(p.id, { colliStd: v }); setHasUnsavedChanges(true); }} /></td>
+                                            <td><NumberCell disabled={palletConclusa || isReadOnly} value={p.pzPerCollo} onChange={(v) => { updateProduct(p.id, { pzPerCollo: v }); setHasUnsavedChanges(true); }} /></td>
+                                            <td><NumberCell disabled={palletConclusa || isReadOnly} value={p.pzSpezz} onChange={(v) => { updateProduct(p.id, { pzSpezz: v }); setHasUnsavedChanges(true); }} /></td>
+                                           <td><NumberCell disabled={palletConclusa || isReadOnly} value={p.pzTotaliProdotto} onChange={(v) => { updateProduct(p.id, { pzTotaliProdotto: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.colliMaxPedana} onChange={(v) => { updateProduct(p.id, { colliMaxPedana: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.nPalletTotali} onChange={(v) => { updateProduct(p.id, { nPalletTotali: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.altStd} onChange={(v) => { updateProduct(p.id, { altStd: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.pesoStd} onChange={(v) => { updateProduct(p.id, { pesoStd: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.altUltimaPedana} onChange={(v) => { updateProduct(p.id, { altUltimaPedana: v }); setHasUnsavedChanges(true); }} /></td>
+<td><NumberCell disabled={palletConclusa || isReadOnly} value={p.pesoUltimaPedana} onChange={(v) => { updateProduct(p.id, { pesoUltimaPedana: v }); setHasUnsavedChanges(true); }} /></td>
+<td><TextCell disabled={palletConclusa || isReadOnly} value={p.noteRiga || ''} onChange={(v) => { updateProduct(p.id, { noteRiga: v }); setHasUnsavedChanges(true); }} placeholder="Note..." /></td>
+                                        </tr>
+                                        <tr className="bg-white/60">
+                                            <td colSpan="13" className="py-2">
+                                                <div className="flex items-center gap-3">
+                                                  <button className="h-9 w-9 rounded bg-green-600 text-white font-bold shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={addRow} disabled={palletConclusa || isReadOnly} title="Aggiungi un nuovo prodotto">+</button>
+                                                    <button className="h-9 px-3 rounded bg-red-600 text-white shadow hover:bg-red-700" 
+    style={(products.length === 1 || palletConclusa || isReadOnly) ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+    onClick={() => removeRow(p.id)} disabled={products.length === 1 || palletConclusa || isReadOnly} title="Rimuovi questo prodotto">Elimina riga</button>
+                                                </div>
+                                                <div className="hidden text-xs text-gray-600">Riga {idx + 1} | Pedane numerate consecutivamente tra tutti i prodotti.</div>
+                                            </td>
+                                        </tr>
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 no-print">
+                        <div className="flex flex-wrap items-center gap-3 mr-2">
+                            <label className="flex items-center gap-2 bg-white/70 border border-blue-200 rounded-lg px-3 h-11 shadow-sm">
+                                <input type="checkbox" className="h-5 w-5" checked={palletConclusa} onChange={e => setPalletConclusa(e.target.checked)} disabled={isReadOnly} />
+                                <span className="text-sm text-blue-900 font-semibold">Pallettizzazione conclusa</span>
+                            </label>
+                        </div>
+                        <button className="h-11 px-5 rounded-lg shadow font-medium text-white" 
+                                style={palletConclusa ? { background: '#059669' } : { background: '#9ca3af', cursor: 'not-allowed' }}
+                                disabled={!palletConclusa} onClick={async () => {
+const palletNum = computed.totals ? computed.totals.pedane : 0;
+const prodottiList = products
+    .filter(p => p.descrizione && p.descrizione.trim() !== '')
+    .map(p => p.descrizione.trim());
+onSendToRitiri(cliente.trim(), palletNum, selectedSaveId, prodottiList);
+									try { await dbClient.from('pallettizzazioni').update({ inviato_a_ritiri: true }).eq('codice_cliente', cliente.trim()); } catch (e) { console.error('update inviato_a_ritiri failed', e); }
+									setSavedItems(prev => prev.filter(x => x.name.toLowerCase() !== cliente.trim().toLowerCase()));
+                                    alert('Inviato a ritiri!');
+									resetAll();
+                                }}>Invia a ritiri</button>
+                        <button className="h-11 px-5 rounded-lg shadow font-medium bg-slate-700 hover:bg-slate-800 text-white" onClick={handleHomeClick}>🏠 Home</button>
+                        <div>
+                            <button className="h-11 px-5 rounded-lg shadow font-medium" 
+                                    style={canOutput ? { background: '#2563eb', color: 'white' } : { background: '#9ca3af', color: 'white', cursor: 'not-allowed' }}
+                                    disabled={!canOutput} onClick={copyMail}>📋 Copia testo email</button>
+                            <button className="h-11 px-5 rounded-lg shadow font-medium bg-gray-700 hover:bg-gray-800 text-white ml-2 disabled:opacity-50 disabled:cursor-not-allowed" onClick={resetAll} disabled={isReadOnly}>🧹 Pulisci</button>
+                        </div>
+                    </div>
+
+                    {canOutput && (
+                        <div className="bg-white rounded-xl shadow-xl border border-green-100 p-5">
+                            <h2 className="text-lg font-bold text-green-900 mb-3">Testo per email</h2>
+                            <textarea className="w-full h-56 p-3 border rounded-lg font-mono text-sm bg-gray-50 resize-none" value={mailTextWithTotals} readOnly />
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const makeRitiriId = () => Math.random().toString(36).slice(2, 10);
+
+        function RitiriApp({ rows, setRows, goHome, userRole }) {
+            const emptyRow = {
+                id: makeRitiriId(),
+                cliente: '',
+                pallet: '',
+                giornoRitiro: '',
+                dettaglioRitiro: '',
+                note: '',
+                completato: false
+            };
+             const isReadOnly = false
+			 const [openProdottiId, setOpenProdottiId] = React.useState(null);
+const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+// Dati caricati da Supabase tramite App (non più localStorage)
+React.useEffect(() => {
+    setHasUnsavedChanges(false);
+}, []);
+function handleHomeClick() {
+  if (!hasUnsavedChanges) { goHome(); return; }
+  const ok = confirm("Hai modifiche non salvate. Vuoi tornare a Home senza salvare?");
+  if (ok) goHome();
+}
+
+            const sortedRows = useMemo(() => {
+                const safe = Array.isArray(rows) ? [...rows] : [];
+                const key = r => !r.giornoRitiro ? '9999-12-31' : String(r.giornoRitiro);
+                safe.sort((a, b) => {
+                    const da = key(a), db = key(b);
+                    if (da < db) return -1;
+                    if (da > db) return 1;
+                    return 0;
+                });
+                return safe;
+            }, [rows]);
+
+            const updateRow = (id, patch) =>
+                setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+
+            const removeRow = id => {
+  setRows(prev => prev.length === 1 ? [emptyRow] : prev.filter(r => r.id !== id));
+  setHasUnsavedChanges(true);
+};
+            
+
+            const handleSalvaRitiri = async () => {
+  console.log('DEBUG handleSalvaRitiri rows:', rows);
+  try {
+  // Salvataggio solo su Supabase
+const previous = rows;
+
+    // 2) Salvataggio anche su Supabase (tabella: ritiri)
+    // Prima svuotiamo la tabella (opzionale: mantieni solo l'ultima "fotografia")
+    const { error: deleteError } = await dbClient
+      .from('ritiri')
+      .delete()
+      .neq('id', 0); // trucco per cancellare tutte le righe
+
+    if (deleteError) {
+      alert('Ritiri salvati in locale, ma errore nel pulire la tabella ritiri: ' + deleteError.message);
+      return;
+    }
+
+    // Prepariamo i dati da inserire
+    const payload = rows.map(r => ({
+  codice_cliente: r.cliente || '',
+  n_pallet: r.pallet ? Number(r.pallet) || 0 : 0,
+  giorno_ritiro: r.giornoRitiro || null,
+  dettaglio_ritiro: r.dettaglioRitiro || '',
+  note: r.note || '',
+  completato: !!r.completato,
+  colore_ritiro: JSON.stringify(r.prodotti || [])
+}));
+
+
+    if (payload.length > 0) {
+      const { error: insertError } = await dbClient
+        .from('ritiri')
+        .insert(payload);
+
+      if (insertError) {
+        alert('Ritiri salvati in locale, ma errore nel salvataggio su database: ' + insertError.message);
+        return;
+      }
+    }
+
+    // 3) Notifica per Ufficio: SOLO se l'utente attuale è "ritirista"
+    const role = localStorage.getItem('userrole');
+let fromEmail = 'unknown';
+
+try {
+  const { data } = await dbClient.auth.getSession();
+  fromEmail = data?.session?.user?.email || 'unknown';
+} catch (e) {
+  console.error('Errore getSession in handleSalvaRitiri:', e);
+}
+
+if (role === 'ritirista' || role === 'ufficio') {
+  const now = new Date();
+  const whenText = now.toLocaleString('it-IT');
+  
+  // Carica le righe precedenti per confronto
+  
+  // Trova le righe modificate o nuove
+  const changedClients = new Set();
+  const deletedClients = new Set();
+  
+  // Trova righe modificate o nuove
+  rows.forEach(currentRow => {
+    // Salta righe vuote
+    if (!currentRow.cliente || !currentRow.cliente.trim()) return;
+    
+    const oldRow = previous.find(p => p.cliente === currentRow.cliente && p.pallet === currentRow.pallet);
+    
+    if (!oldRow) {
+      // Riga nuova
+      changedClients.add(currentRow.cliente.trim());
+    } else {
+      // Controlla se qualche campo è cambiato
+      if (oldRow.giornoRitiro !== currentRow.giornoRitiro ||
+          oldRow.dettaglioRitiro !== currentRow.dettaglioRitiro ||
+          oldRow.note !== currentRow.note ||
+          oldRow.completato !== currentRow.completato) {
+        changedClients.add(currentRow.cliente.trim());
+      }
+    }
+  });
+  
+  // Trova righe eliminate
+  previous.forEach(oldRow => {
+    if (!oldRow.cliente || !oldRow.cliente.trim()) return;
+    
+    const stillExists = rows.find(r => r.cliente === oldRow.cliente && r.pallet === oldRow.pallet);
+    if (!stillExists) {
+      deletedClients.add(oldRow.cliente.trim());
+    }
+  });
+  
+  // Costruisci il messaggio
+  const changed = Array.from(changedClients).slice(0, 3);
+  const deleted = Array.from(deletedClients).slice(0, 3);
+  
+  let messageParts = [];
+  if (changed.length > 0) {
+    messageParts.push(changed.join(', '));
+  }
+  if (deleted.length > 0) {
+    messageParts.push(deleted.map(c => c + ' (eliminato)').join(', '));
+  }
+  
+  const message = messageParts.length > 0
+    ? 'Ritiri aggiornati: ' + messageParts.join(', ') + ' (' + whenText + ')'
+    : 'Hai notifiche su Ritiri (' + whenText + ')';
+  
+  const ALL_USERS = [
+    'marco@clienti.it',
+    'stefano@clienti.it',
+    'serena@clienti.it',
+    'beatrice@clienti.it',
+    'ufficio@magazzino.it'
+];
+
+const recipients = ALL_USERS.filter(email => email !== fromEmail);
+
+const notifPayload = recipients.map(email => ({
+    toemail: email,
+    type: 'ritiri_saved',
+    message: message,
+    payload: { source: 'ritiri', when: now.toISOString() },
+    created_by_email: fromEmail,
+}));
+
+const { error: notifError } = await dbClient
+    .from('notifications')
+    .insert(notifPayload);
+
+  if (notifError) {
+    console.error('Errore insert notifications:', notifError);
+  }
+}
+
+    alert('✅ Ritiri salvati con successo (locale + database)!');
+    setHasUnsavedChanges(false);
+  } catch (err) {
+    alert('Errore: ' + err.message);
+  }
+};
+
+         const refreshRitiri = async () => {
+  try {
+    // Leggiamo TUTTI i dati dalla tabella ritiri su Supabase
+    const { data, error } = await dbClient
+      .from('ritiri')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      alert('Errore nel refresh da Supabase: ' + error.message);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      alert('Nessun dato trovato su Supabase (tabella ritiri vuota).');
+      return;
+    }
+
+    // Convertiamo i dati da Supabase al formato dell'app
+    const loaded = data.map(row => ({
+      id: row.id || makeRitiriId(),
+      cliente: row.codice_cliente || '',
+      pallet: row.n_pallet || '',
+      giornoRitiro: row.giorno_ritiro || '',
+      dettaglioRitiro: row.dettaglio_ritiro || '',
+      note: row.note || '',
+      completato: !!row.completato,
+prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e) { return []; } })()
+    }));
+
+   // Nessuna scrittura su localStorage
+
+    // Carichiamo i dati nell'app (aggiorniamo lo stato)
+    setRows(loaded);
+    
+    alert('✅ Ritiri aggiornati da Supabase!');
+  } catch (err) {
+    alert('Errore di connessione nel refresh: ' + err.message);
+  }
+};
+
+
+
+
+            return (
+                <div className="space-y-5">
+                    <div className="text-center">
+                        <h1 className="text-2xl md:text-3xl font-extrabold text-blue-900">Ritiri Dmg Italia/Italdevice</h1>
+                        <div className="hidden text-sm text-blue-900/70">v1.0 | Salvataggio SOLO con pulsante Salva</div>
+                    </div>
+
+                    <div className="bg-white/70 border border-blue-200 rounded-lg p-3 shadow-sm no-print">
+                       <div className="flex flex-wrap gap-2 items-center">
+    <button className="h-11 px-5 rounded-lg shadow font-medium bg-slate-700 text-white hover:bg-slate-800" onClick={handleHomeClick}>🏠 Home</button>
+    <button className="h-10 px-4 rounded bg-green-600 text-white shadow hover:bg-green-700 font-medium" onClick={handleSalvaRitiri}>💾 Salva</button>
+    <button className="h-10 px-4 rounded bg-sky-600 text-white shadow hover:bg-sky-700 font-medium" onClick={refreshRitiri}>🔄 Refresh</button>
+</div>
+
+                        <div className="hidden text-xs text-gray-600 mt-2">Cliente e N. Pallet non sono editabili (arriveranno dalla Pallettizzazione quando uniremo le app).</div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-xl border border-blue-100 overflow-x-auto">
+                        <table className="table w-full text-sm">
+                            <thead>
+                                <tr>
+                                    <th className="text-left w-48">Cliente</th>
+                                    <th className="text-center w-10">N. Pallet</th>
+                                    <th className="text-center w-6">Giorno ritiro</th>
+                                    <th className="text-left w-88">Dettaglio ritiro</th>
+                                    <th className="text-left w-76">Note</th>
+                                    <th className="text-center w-4">Completato</th>
+                                    <th className="text-center w-2"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sortedRows.map(row => (
+                                    <tr key={row.id} className="hover:bg-blue-50/40" style={row.completato ? { backgroundColor: '#f3f4f6' } : {}}>
+                                        <td>
+  <div className="flex items-center gap-1 relative">
+    <input type="text" className="w-full h-9 border rounded px-2 text-sm bg-gray-100" value={row.cliente} readOnly disabled={row.completato} />
+    {row.prodotti && row.prodotti.length > 0 && (
+      <button onClick={() => setOpenProdottiId(openProdottiId === row.id ? null : row.id)}
+        className="text-blue-600 hover:text-blue-800 text-base px-1" title="Mostra prodotti">👁️</button>
+    )}
+    {openProdottiId === row.id && (
+      <div className="absolute top-10 left-0 z-50 bg-white border border-blue-200 rounded-lg shadow-lg p-3 min-w-48">
+        <div className="text-xs font-semibold text-blue-900 mb-2">📦 Prodotti:</div>
+        {row.prodotti.map((p, i) => (
+          <div key={i} className="text-xs text-gray-700 py-0.5">• {p}</div>
+        ))}
+      </div>
+    )}
+  </div>
+</td>
+                                        <td><input type="text" className="w-full h-9 border rounded px-2 text-sm text-center bg-gray-100" value={row.pallet} readOnly disabled={row.completato} /></td>
+                                        <td className="text-center">
+                                            <input type="date" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly}
+                                                   value={row.giornoRitiro} onChange={e => { updateRow(row.id, { giornoRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
+                                        </td>
+                                        <td>
+  <div className="flex items-center gap-1">
+    <input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.dettaglioRitiro} onChange={e => { updateRow(row.id, { dettaglioRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
+    {sortedRows.filter(r => r.id !== row.id && r.dettaglioRitiro && r.dettaglioRitiro.trim() !== '' && r.dettaglioRitiro.trim() === row.dettaglioRitiro.trim() && r.giornoRitiro === row.giornoRitiro).length > 0 && (
+      <span title="Stesso mezzo di un altro ritiro" style={{fontSize:'16px', cursor:'default'}}>🔗</span>
+    )}
+  </div>
+</td>
+                                        <td><input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.note} onChange={e => { updateRow(row.id, { note: e.target.value }); setHasUnsavedChanges(true); }} /></td>
+                                        <td className="text-center">
+                                            <input type="checkbox" className="h-5 w-5" checked={!!row.completato}
+       onChange={e => updateRow(row.id, { completato: e.target.checked })} disabled={isReadOnly} />
+                                        </td>
+                                        <td className="text-center">
+                                            <button className="h-9 px-2 rounded text-white shadow bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => removeRow(row.id)} disabled={isReadOnly} title="Elimina riga">×</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        function HomeScreen({ goPallet, goRitiri }) {
+            return (
+                <div className="min-h-80vh flex flex-col items-center justify-center gap-6 text-center">
+                    <div className="text-blue-900">
+                        <div className="text-3xl md:text-4xl font-extrabold">Logistica Dmg Italia/Italdevice</div>
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <button className="h-14 px-8 rounded-xl bg-blue-700 hover:bg-blue-800 text-white shadow font-semibold" onClick={goPallet}>📦 Pallettizzazione</button>
+                        <button className="h-14 px-8 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow font-semibold" onClick={goRitiri}>🚚 Ritiri</button>
+                    </div>
+                </div>
+            );
+        }
+function getRoleFromEmail(email) {
+const e = (email || '').toLowerCase();
+if (e === 'admin@clienti.it') return 'admin';
+if (e === 'ufficio@magazzino.it') return 'ufficio';
+if (e === 'marco@clienti.it' || e === 'stefano@clienti.it' || e === 'serena@clienti.it' || e === 'beatrice@clienti.it') return 'ritirista';
+return 'operatore';
+}
+    function App() {
+  const [screen, setScreen] = React.useState('home');
+  const [userRole, setUserRole] = React.useState(localStorage.getItem('userrole') || 'operatore');
+
+ const [ritiriRows, setRitiriRows] = React.useState([]);
+
+  // --- NOTIFICHE (solo Ritiri) ---
+    // 🔔 Suono semplice per nuove notifiche
+  const playNotificationSound = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.value = 880; // frequenza del beep
+      gain.gain.value = 0.05;    // volume molto basso
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      setTimeout(() => {
+        osc.stop();
+        ctx.close();
+      }, 200); // durata 200ms
+    } catch (e) {
+      console.warn('Audio bloccato dal browser', e);
+    }
+  };
+  const UFFICIO_EMAIL = 'ufficio@magazzino.it';
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  const [currentEmail, setCurrentEmail] = React.useState('');
+const [isUfficio, setIsUfficio] = React.useState(false)
+
+useEffect(() => {
+ const loadSessionEmail = async () => {
+    try {
+      const { data, error } = await dbClient.auth.getSession();
+      if (error) {
+        console.error('Errore getSession:', error);
+        return;
+      }
+      const email = data?.session?.user?.email || '';
+      setCurrentEmail(email);
+  setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
+      loadNotifications(email);
+    } catch (e) {
+      console.error('Errore getSession (catch):', e);
+    }
+  };
+
+  loadSessionEmail();
+
+  // Ascolta i cambi di sessione (login/logout/refresh token)
+  const { data: authListener } = dbClient.auth.onAuthStateChange((_event, session) => {
+    const email = session?.user?.email || '';
+    setCurrentEmail(email);
+    setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
+    loadNotifications(email);
+  });
+
+  return () => {
+    authListener?.subscription?.unsubscribe();
+  };
+}, []);
+  const loadNotifications = async (emailOverride) => {
+    const email = emailOverride || currentEmail;
+    if (!email) return;
+    try {
+      const { data, error } = await dbClient
+        .from('notifications')
+        .select('id, created_at, message, read_at, created_by_email')
+        .eq('toemail', email)
+        .eq('type', 'ritiri_saved')
+        .is('read_at', null)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Errore load notifications:', error);
+        return;
+      }
+
+      const list = Array.isArray(data) ? data : [];
+      setNotifications(list);
+      setUnreadCount(list.length);
+    } catch (e) {
+      console.error('Errore connessione notifications:', e);
+    }
+  };
+  // Realtime: aggiorna le notifiche ufficio quando un ritirista salva (INSERT su notifications)
+  useEffect(() => {
+
+    // Carica subito le non lette (anche se erano state create quando l'ufficio era offline)
+    loadNotifications();
+	
+    const channel = dbClient
+  .channel('pallettizzazioni-ritiri-sync')
+  // ✅ CASO 1: Inviato a ritiri o modificato
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pallettizzazioni' }, payload => {
+    const updated = payload?.new;
+    if (!updated) return;
+    if (updated.inviato_a_ritiri === true || updated.inviato_a_ritiri === 'true') {
+      // Rimuove dal menù se mandato a ritiri
+      setSavedItems(prev => prev.filter(x =>
+        x.name.toLowerCase() !== (updated.codice_cliente || '').toLowerCase()
+      ));
+    } else {
+      // Aggiorna il dato nel menù se modificato
+      setSavedItems(prev => prev.map(x => {
+        if (x.name.toLowerCase() !== (updated.codice_cliente || '').toLowerCase()) return x;
+        const snap = updated.dati_completi;
+        return {
+          ...x,
+          cliente: snap?.cliente || snap?.name || x.cliente,
+          products: snap?.products || x.products,
+          specchietto: snap?.specchietto || x.specchietto,
+        };
+      }));
+    }
+  })
+  // ✅ CASO 2: Eliminato da qualcuno
+.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'pallettizzazioni' }, payload => {
+    console.log('🗑️ DELETE ricevuto!', payload);  // 🆕
+    const deleted = payload?.old;
+    if (!deleted) return;
+    console.log('🗑️ codice_cliente eliminato:', deleted.codice_cliente);  // 🆕
+    const deletedName = (deleted.codice_cliente || '').toLowerCase();
+    setSavedItems(prev => prev.filter(x => x.name.toLowerCase() !== deletedName));
+    setCliente(prev => prev.trim().toLowerCase() === deletedName ? '' : prev);
+    setProducts([{...emptyProduct, id: makeId()}]);
+    setSpecchietto('');
+    setSelectedSaveId(null);
+})
+  // ✅ CASO 3: Nuovo inserimento da qualcuno
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pallettizzazioni' }, payload => {
+    const inserted = payload?.new;
+    if (!inserted || inserted.inviato_a_ritiri) return;
+    const snap = inserted.dati_completi;
+    if (!snap) return;
+    const newItem = {
+      id: snap.id || makeId(),
+      name: inserted.codice_cliente || snap.name || 'Senza nome',
+      updatedAt: new Date().toISOString(),
+      cliente: snap.cliente || snap.name || '',
+      products: snap.products || [],
+      specchietto: snap.specchietto || '',
+    };
+    // Aggiunge solo se non esiste già
+    setSavedItems(prev => {
+      const exists = prev.some(x => x.name.toLowerCase() === newItem.name.toLowerCase());
+      if (exists) return prev;
+      return [newItem, ...prev];
+    });
+  })
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, payload => {
+    const notif = payload?.new;
+	console.log('🔔 Realtime INSERT notifications ricevuto!', notif);
+	    playNotificationSound();
+    if (!notif) return;
+    loadNotifications();
+})
+
+.subscribe((status) => {
+    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        setTimeout(() => channel.subscribe(), 3000);
+    }
+});
+
+        return () => {
+      dbClient.removeChannel(channel);
+    };
+	});
+
+  // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
+  useEffect(() => {
+    const intervalId = setInterval(loadNotifications, 10000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+    }, [currentEmail]);
+
+  const markNotificationRead = async (id) => {
+    try {
+      const { error } = await dbClient
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Errore mark read:', error);
+        return;
+      }
+
+      // Aggiorna UI locale
+	  console.log('🗑️ Rimuovo notifica ID:', id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+	  console.log('✅ Notifica rimossa dalla UI');
+      setUnreadCount(prev => Math.max(0, prev - 1));
+	    
+    } catch (e) {
+      console.error('Errore connessione mark read:', e);
+    }
+  };
+
+// Carica notifiche ogni volta che cambia email (tutti gli utenti)
+useEffect(() => {
+  loadNotifications();
+}, [currentEmail]);
+// 🔔 Suona quando arriva una nuova notifica
+const prevUnreadCount = React.useRef(0);
+useEffect(() => {
+  if (unreadCount > prevUnreadCount.current) {
+    playNotificationSound();
+  }
+  prevUnreadCount.current = unreadCount;
+}, [unreadCount]);
+
+  // --- FINE NOTIFICHE ---
+
+ // funzione rimossa - sostituita da handleSendToRitiri
+
+  const refreshRitiriData = (newRows) => setRitiriRows(newRows);
+
+  // 🆕 Carica automaticamente da Supabase all'avvio
+  useEffect(() => {
+    const loadRitiriFromSupabase = async () => {
+      try {
+        const { data, error } = await dbClient
+          .from('ritiri')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('❌ Errore caricamento Ritiri da Supabase:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const loadedRitiri = data.map(row => ({
+            id: row.id || makeRitiriId(),
+            cliente: row.codice_cliente || '',
+            pallet: row.n_pallet || '',
+            giornoRitiro: row.giorno_ritiro || '',
+            dettaglioRitiro: row.dettaglio_ritiro || '',
+            note: row.note || '',
+            completato: !!row.completato,
+prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e) { return []; } })()
+          }));
+
+          setRitiriRows(loadedRitiri);
+          console.log('✅ Caricati', data.length, 'ritiri da Supabase');
+        }
+      } catch (err) {
+        console.error('❌ Errore connessione Supabase:', err);
+      }
+    };
+
+    loadRitiriFromSupabase();
+  }, []);
+
+  const handleSendToRitiri = async (cliente, pallet, saveId, prodottiList = []) => {
+    // Aggiorniamo lo stato locale
+    setRitiriRows(prev => {
+      console.log('DEBUG handleSendToRitiri', { cliente, pallet, saveId });
+      const clone = Array.isArray(prev) ? [...prev] : [];
+      const firstEmptyIdx = clone.findIndex(r => !r.cliente && !r.pallet && !r.giornoRitiro && !r.dettaglioRitiro && !r.note && !r.completato);
+      const payload = { cliente, pallet: String(pallet || '') };
+      if (firstEmptyIdx >= 0) {
+        clone[firstEmptyIdx] = { ...clone[firstEmptyIdx], ...payload };
+        return clone;
+      }
+      return [{ id: Math.random().toString(36).slice(2, 10), ...payload, giornoRitiro: '', dettaglioRitiro: '', note: '', completato: false, prodotti: prodottiList }, ...clone];
+    });
+
+    // Salviamo anche su Supabase
+    try {
+      const { error } = await dbClient
+        .from('ritiri')
+        .insert({
+          codice_cliente: cliente || '',
+n_pallet: Number(pallet) || 0,
+giorno_ritiro: null,
+dettaglio_ritiro: '',
+note: '',
+completato: false,
+colore_ritiro: JSON.stringify(prodottiList)
+        });
+
+      if (error) {
+        console.error('Errore nel salvataggio automatico su Supabase:', error);
+      }
+    } catch (err) {
+      console.error('Errore di connessione:', err);
+    }
+  };
+
+  // Wrapper per avere l'icona notifiche sempre visibile
+  const content = (() => {
+    if (screen === 'home') return <HomeScreen goPallet={() => setScreen('pallet')} goRitiri={() => setScreen('ritiri')} />;
+    if (screen === 'ritiri') return <RitiriApp rows={ritiriRows} setRows={setRitiriRows} goHome={() => setScreen('home')} userRole={userRole} />;
+    return <PallettizzazioneApp onSendToRitiri={handleSendToRitiri} goHome={() => { setScreen('home'); }} userRole={userRole} />;
+  })();
+
+  return (
+    <div className="relative">
+      {/* Pulsante Notifiche sempre visibile */}
+      <div className="fixed top-4 left-4 z-50 no-print">
+        <button
+          className="h-10 px-3 rounded bg-white border border-blue-200 shadow text-blue-900 font-semibold"
+          onClick={() => {
+            setNotifOpen(o => !o);
+            if (!notifOpen) loadNotifications();
+          }}
+          title="Notifiche"
+        >
+          Notifiche{unreadCount > 0 ? ` (${unreadCount})` : ''}
+        </button>
+
+        {notifOpen && (
+          <div className="mt-2 w-80 bg-white border border-blue-200 rounded-lg shadow p-2 max-h-80 overflow-auto">
+{notifications.length === 0 && (
+  <div className="text-sm text-gray-700 p-2">
+    Nessuna notifica non letta.
+  </div>
+)}
+
+{notifications.map(n => (
+  <button
+    key={n.id}
+    className="w-full text-left p-2 rounded hover:bg-blue-50 border-b last:border-b-0"
+    onClick={() => markNotificationRead(n.id)}
+    title="Clicca per segnare come letta"
+  >
+    <div className="text-sm font-semibold text-blue-900">{n.message}</div>
+    <div className="text-xs text-gray-600">Da: {n.created_by_email || 'sconosciuto'}</div>
+  </button>
+))}
+          </div>
+        )}
+      </div>
+
+      {content}
+    </div>
+  );
+}
+// 🔒 BLOCCO senza login
+if (!localStorage.getItem('user_logged')) {
+  const loginHtml = document.getElementById('login-container')?.outerHTML || '';
+  document.body.innerHTML = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:40px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);text-align:center;z-index:10;">
+    <div style="margin:0 0 14px 0;color:#1e3a8a;font-size:28px;font-weight:800;">Logistic-app</div>
+    <h2 style="color:#1e3a8a;">🔒 Login Obbligatorio</h2>
+    <p>Accedi per usare l'app.</p>
+    ${loginHtml}
+  </div>`;
+}
+
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+		// Pulizia: se per errore resta un carattere "<" o ">" come testo nel body, lo rimuoviamo
+setTimeout(() => {
+  try {
+    const nodes = Array.from(document.body.childNodes);
+    nodes.forEach((n) => {
+      if (n.nodeType === Node.TEXT_NODE && (n.textContent || '').trim().match(/^[<>]$/)) {
+        n.remove();
+      }
+    });
+  } catch (e) {}
+}, 0);
+    </script>
+<script>
+  // Configurazione Supabase
+  const SUPABASE_URL = 'https://xsksvknvipacxgxogpsb.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_RKMbPknKahSiHCLwQLF2QA_ZehGxAwj';
+
+  // Crea il client Supabase
+  const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  console.log('✅ Connesso a Supabase!', dbClient);
+
+  // Crea bottone login DOPO caricamento pagina
+  window.addEventListener('load', () => {
+    const container = document.createElement('div');
+    container.id = 'login-container';
+    container.style.cssText = 'position:fixed; top:16px; right:16px; z-index:9999;';
+    container.innerHTML = `
+      <button id="btn-toggle-login" style="background:#3b82f6; color:white; padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Login</button>
+      <div id="login-panel" style="display:none; margin-top:8px; background:white; padding:16px; border:1px solid #ddd; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.1); width:280px;">
+        <input id="email-login" type="email" placeholder="marco@clienti.it" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:14px;">
+        <input id="password-login" type="password" placeholder="Password" style="width:100%; margin-bottom:12px; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:14px;">
+        <button id="btn-login" style="width:100%; background:#3b82f6; color:white; padding:10px; border:none; border-radius:4px; cursor:pointer; font-weight:600;">Entra</button>
+        <div id="user-info" style="margin-top:12px; display:none; padding:8px; background:#f0f9ff; border-radius:4px; font-size:13px;"></div>
+        <button id="btn-logout" style="width:100%; background:#ef4444; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; margin-top:8px; display:none; font-weight:600;">Esci</button>
+      </div>
+    `;
+    document.body.appendChild(container);
+
+    // ⭐ CONTROLLO SESSIONE ALL'AVVIO ⭐
+    // Controlla se l'utente era già loggato
+    const isLogged = localStorage.getItem('user_logged') === 'true';
+    const userEmail = localStorage.getItem('user_email');
+    const userRole = localStorage.getItem('userrole') || 'operatore';
+	
+    if (isLogged && userEmail) {
+      // Utente già loggato: nascondi i campi di login
+      console.log('✅ Utente già loggato:', userEmail);
+      document.getElementById('email-login').style.display = 'none';
+      document.getElementById('password-login').style.display = 'none';
+      document.getElementById('btn-login').style.display = 'none';
+      document.getElementById('btn-logout').style.display = 'block';
+      document.getElementById('user-info').style.display = 'block';
+      document.getElementById('user-info').textContent = '👤 ' + userEmail;
+	  document.getElementById('login-panel').style.display = 'block';
+    } else {
+      // Utente non loggato: mostra i campi
+      console.log('ℹ️ Utente non loggato');
+    }
+
+    // Toggle pannello
+    document.getElementById('btn-toggle-login').onclick = () => {
+      const panel = document.getElementById('login-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    };
+
+    // Login
+    document.getElementById('btn-login').onclick = async () => {
+      const email = document.getElementById('email-login').value.trim();
+      const password = document.getElementById('password-login').value;
+
+      if (!email || !password) {
+        alert('❌ Inserisci email e password!');
+        return;
+      }
+
+      const { data, error } = await dbClient.auth.signInWithPassword({
+        email, password
+      });
+
+      if (error) {
+        alert('❌ ' + error.message);
+        return;
+      }
+
+      // Login riuscito
+      alert('✅ Benvenuto ' + data.user.email);
+      localStorage.setItem('user_logged', 'true');
+      localStorage.setItem('user_email', data.user.email);
+      const userRole = getRoleFromEmail(data.user.email);
+localStorage.setItem('userrole', userRole);
+window.location.reload();
+
+      // Aggiorna interfaccia
+      document.getElementById('email-login').style.display = 'none';
+      document.getElementById('password-login').style.display = 'none';
+      document.getElementById('btn-login').style.display = 'none';
+      document.getElementById('btn-logout').style.display = 'block';
+      document.getElementById('user-info').style.display = 'block';
+      document.getElementById('user-info').textContent = '👤 ' + data.user.email;
+
+      // Ricarica la pagina per inizializzare l'app
+      location.reload();
+    };
+
+    // Logout
+    document.getElementById('btn-logout').onclick = async () => {
+      await dbClient.auth.signOut();
+      localStorage.removeItem('user_logged');
+      localStorage.removeItem('user_email');
+      alert('👋 Logout effettuato');
+      location.reload();
+    };
+
+    console.log('✅ Login UI pronto!');
+  });
+</script>
+
+
+
+
+</body>
+</html>
