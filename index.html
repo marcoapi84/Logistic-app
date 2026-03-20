@@ -1255,7 +1255,7 @@ useEffect(() => {
 
   // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
   useEffect(() => {
-    const intervalId = setInterval(loadNotifications, 10000);
+    const intervalId = setInterval(loadNotifications, 120000);
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         loadNotifications();
