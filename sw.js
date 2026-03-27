@@ -1,4 +1,4 @@
-const CACHE_NAME = "logistic-v1";
+const CACHE_NAME = "logistic-v2";
 const ASSETS = [
   "/",
   "/index.html"
@@ -21,9 +21,23 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
+  // Per index.html: sempre rete prima, cache solo se offline
+  if (event.request.url.includes("index.html") || event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+  // Per tutto il resto: cache prima (icone, manifest, ecc.)
   event.respondWith(
     caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).catch(() => caches.match("/index.html"));
+      return cached || fetch(event.request);
     })
   );
 });
