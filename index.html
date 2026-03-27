@@ -839,15 +839,13 @@ const previous = rows;
     }
 
     // 3) Notifica per Ufficio: SOLO se l'utente attuale è "ritirista"
-    const role = localStorage.getItem('userrole');
 let fromEmail = 'unknown';
-
 try {
   const { data } = await dbClient.auth.getSession();
-  fromEmail = data?.session?.user?.email || 'unknown';
-} catch (e) {
-  console.error('Errore getSession in handleSalvaRitiri:', e);
-}
+  fromEmail = data?.session?.user?.email ?? 'unknown';
+} catch(e) { console.error('Errore getSession in handleSalvaRitiri', e); }
+
+const role = getRoleFromEmail(fromEmail);
 
 if (role === 'ritirista' || role === 'ufficio') {
   const now = new Date();
