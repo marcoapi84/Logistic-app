@@ -1264,12 +1264,16 @@ useEffect(() => {
 
   // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
   useEffect(() => {
-    const intervalId = setInterval(loadNotifications, 120000);
+    const intervalId = setInterval(loadNotifications, 30000);
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        loadNotifications();
-      }
-    };
+  if (document.visibilityState === 'visible') {
+    loadNotifications();
+    // Riconnetti il canale Realtime se è morto
+    if (channel && (channel.state === 'closed' || channel.state === 'errored')) {
+      channel.subscribe();
+    }
+  }
+};
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       clearInterval(intervalId);
