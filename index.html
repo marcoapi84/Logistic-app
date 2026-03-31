@@ -224,31 +224,7 @@ const writeSaves = () => {};
             const [savedItems, setSavedItems] = useState(readSaves());
             const [selectedSaveId, setSelectedSaveId] = useState('');
 			const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-			useEffect(() => {
-  const channel = dbClient
-    .channel('pallettizzazioni-ritiri-sync')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'pallettizzazioni' },
-      (payload) => {
-        const updated = payload?.new;
-        if (!updated) return;
-        if (updated.inviato_a_ritiri === true || updated.inviatoaritiri === true) {
-          setSavedItems(prev =>
-            prev.filter(x =>
-              (x.name || '').toLowerCase() !== (updated.codice_cliente || updated.codicecliente || '').toLowerCase()
-            )
-          );
-        }
-      }
-    )
-  .subscribe((status) => {
-    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        setTimeout(() => channel.subscribe(), 3000);
-    }
-});
-return () => { dbClient.removeChannel(channel); };
-}, []);
+
 function handleHomeClick() {
 
   if (!hasUnsavedChanges) {
@@ -1251,16 +1227,13 @@ useEffect(() => {
 })
 
 .subscribe((status) => {
-    if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        setTimeout(() => channel.subscribe(), 3000);
-    }
+  if (status === 'CLOSED' || status === 'CHANNEL_ERROR') console.warn('Canale chiuso:', status);
 });
 
-        return () => {
-      dbClient.removeChannel(channel);
-    };
-	});
-
+return () => {
+  dbClient.removeChannel(channel);
+};
+}, [currentEmail]);
   // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
   useEffect(() => {
     const intervalId = setInterval(loadNotifications, 30000);
