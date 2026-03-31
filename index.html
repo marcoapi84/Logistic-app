@@ -1084,7 +1084,7 @@ return 'operatore';
 }
     function App() {
   const [screen, setScreen] = React.useState('home');
-  const [userRole, setUserRole] = React.useState(localStorage.getItem('userrole') || 'operatore');
+ const [userRole, setUserRole] = React.useState('operatore');
 
  const [ritiriRows, setRitiriRows] = React.useState([]);
 
@@ -1129,8 +1129,9 @@ useEffect(() => {
         return;
       }
       const email = data?.session?.user?.email || '';
-      setCurrentEmail(email);
-  setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
+     setCurrentEmail(email);
+      setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
+      setUserRole(getRoleFromEmail(email));
       loadNotifications(email);
     } catch (e) {
       console.error('Errore getSession (catch):', e);
@@ -1144,9 +1145,9 @@ useEffect(() => {
     const email = session?.user?.email || '';
     setCurrentEmail(email);
     setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
+    setUserRole(getRoleFromEmail(email));
     loadNotifications(email);
   });
-
   return () => {
     authListener?.subscription?.unsubscribe();
   };
