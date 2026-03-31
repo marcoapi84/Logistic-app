@@ -1268,9 +1268,7 @@ useEffect(() => {
   if (document.visibilityState === 'visible') {
     loadNotifications();
     // Riconnetti il canale Realtime se è morto
-    if (channel && (channel.state === 'closed' || channel.state === 'errored')) {
-      channel.subscribe();
-    }
+   // nessuna azione - il canale si riconnette da solo
   }
 };
     document.addEventListener('visibilitychange', handleVisibility);
