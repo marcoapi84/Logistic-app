@@ -238,40 +238,45 @@ function handleHomeClick() {
             // localStorage non più usato come fonte primaria
 			// 🆕 Carica automaticamente da Supabase all'avvio
 useEffect(() => {
-   const loadFromSupabase = async () => {
-    try {
-        const { data, error } = await dbClient
-            .from('pallettizzazioni')
-            .select('id, codice_cliente, created_at, dati_completi')
-            .eq('inviato_a_ritiri', false)
-            .order('created_at', { ascending: false })
-            .limit(100);
+    const loadFromSupabase = async () => {
+        try {
+            const { data, error } = await dbClient
+                .from('pallettizzazioni')
+                .select('dati_completi, codice_cliente')
+				.eq('inviato_a_ritiri', false)
+                .order('created_at', { ascending: false })
+                .limit(100); // Carica le ultime 100
 
-        if (error) {
-            console.error('❌ Errore caricamento Supabase:', error);
-            return;
+            if (error) {
+                console.error('❌ Errore caricamento Supabase:', error);
+                return;
+            }
+console.log('DATI DA SUPABASE:', JSON.stringify(data));
+
+            if (data && data.length > 0) {
+                // Aggiungi i dati caricati all'archivio locale
+                const loadedItems = data.map(item => {
+                    const snapshot = item.dati_completi;
+                    return {
+                        id: snapshot.id || makeId(),
+                        name: item.codice_cliente || snapshot.name || snapshot.cliente || 'Senza nome',
+                        updatedAt: snapshot.updatedAt || new Date().toISOString(),
+                                    cliente: snapshot.cliente || snapshot.name || '',
+            products: snapshot.products || [],
+            specchietto: snapshot.specchietto || ''
+        };
+                });
+
+                // Fonte unica: solo Supabase
+setSavedItems(loadedItems);
+
+                console.log('✅ Caricati', data.length, 'salvataggi da Supabase');
+            }
+        } catch (err) {
+            console.error('❌ Errore connessione Supabase:', err);
         }
+    };
 
-        console.log('DATI DA SUPABASE:', JSON.stringify(data));
-
-        if (data && data.length > 0) {
-            const loadedItems = data.map(item => {
-                const snapshot = item.dati_completi || {};
-                return {
-                    id: String(item.id || snapshot.id || makeId()),
-                    name: item.codice_cliente || snapshot.name || snapshot.cliente || 'Senza nome',
-                    updatedAt: snapshot.updatedAt || item.created_at || new Date().toISOString(),
-                    cliente: snapshot.cliente || snapshot.name || ''
-                };
-            });
-
-            setSavedItems(loadedItems);
-            console.log('✅ Caricati', data.length, 'salvataggi da Supabase');
-        }
-    } catch (err) {
-        console.error('❌ Errore connessione Supabase:', err);
-    }
-};
     loadFromSupabase();
 }, []); // [] = esegui solo all'avvio
 
@@ -335,48 +340,22 @@ useEffect(() => {
 };
 
 
-            const loadSelected = async () => {
-  const item = savedItems.find(x => String(x.id) === String(selectedSaveId));
-  console.log('DEBUG LOAD', { selectedSaveId, savedItems, item });
-  if (!item) { 
-    alert('Seleziona un salvataggio da caricare.'); 
-    return; 
-  }
-
-  try {
-    const { data, error } = await dbClient
-      .from('pallettizzazioni')
-      .select('dati_completi, codice_cliente')
-      .eq('codice_cliente', item.name)
-      .single();
-
-    if (error) {
-      alert('Errore nel caricamento del record: ' + error.message);
-      return;
-    }
-
-    const snapshot = data?.dati_completi;
-    if (!snapshot) {
-      alert('Nessun dato completo trovato per questo record.');
-      return;
-    }
-
-    setCliente(snapshot.cliente || snapshot.name || item.name);
-    setProducts(normalizeProducts(snapshot.products));
-    setSpecchietto(snapshot.specchietto || '');
-    alert('Caricato: ' + item.name);
-  } catch (err) {
-    alert('Errore di connessione nel caricamento: ' + err.message);
-  }
-};
-const refreshFromSupabase = async () => {
+            const loadSelected = () => {
+                const item = savedItems.find(x => x.id === selectedSaveId);
+                if (!item) { alert('Seleziona un salvataggio da caricare.'); return; }
+                setCliente(item.cliente || item.name);
+              setProducts(normalizeProducts(item.products));
+              setSpecchietto(item.specchietto || '');
+              alert('Caricato: ' + item.name);
+            }; //
+          const refreshFromSupabase = async () => {
     try {
         const { data, error } = await dbClient
             .from('pallettizzazioni')
-            .select('id, codice_cliente, created_at, dati_completi')
-            .eq('inviato_a_ritiri', false)
-            .order('created_at', { ascending: false })
-            .limit(100);
+.select('dati_completi, codice_cliente')
+.eq('inviato_a_ritiri', false)
+.order('created_at', { ascending: false })
+.limit(100);
 
         if (error) {
             alert('Errore nel refresh da Supabase: ' + error.message);
@@ -388,22 +367,48 @@ const refreshFromSupabase = async () => {
             return;
         }
 
-        const loadedItems = data.map(item => {
-            const snapshot = item.dati_completi || {};
-            return {
-                id: String(item.id || snapshot.id || makeId()),
-                name: item.codice_cliente || snapshot.name || snapshot.cliente || 'Senza nome',
-                updatedAt: snapshot.updatedAt || item.created_at || new Date().toISOString(),
-                cliente: snapshot.cliente || snapshot.name || ''
-            };
-        });
+        // Ricostruisce l'intero archivio da Supabase
+const loadedItems = data.map(item => {
+    const snapshot = item.dati_completi;
+    return {
+        id: snapshot?.id || makeId(),
+        name: item.codice_cliente || snapshot?.name || snapshot?.cliente || 'Senza nome',
+        updatedAt: new Date().toISOString(),
+        cliente: snapshot?.cliente || snapshot?.name || '',
+        products: snapshot?.products || [],
+        specchietto: snapshot?.specchietto || ''
+    };
+});
+setSavedItems(loadedItems);
 
-        setSavedItems(loadedItems);
-        alert('Dati aggiornati da Supabase!');
+// 🆕 Se il cliente a schermo esiste ancora, aggiorna i dati visualizzati
+setCliente(prev => {
+    const exists = loadedItems.some(x => x.name.toLowerCase() === prev.trim().toLowerCase());
+    if (!exists && prev.trim() !== '') {
+        // Cliente eliminato → pulisce tutto
+        setProducts([{...emptyProduct, id: makeId()}]);
+        setSpecchietto('');
+        setSelectedSaveId(null);
+        return '';
+    }
+    if (exists && prev.trim() !== '') {
+        // Cliente modificato → aggiorna i dati a schermo
+        const updated = loadedItems.find(x => x.name.toLowerCase() === prev.trim().toLowerCase());
+        setProducts(normalizeProducts(updated.products || []));
+        setSpecchietto(updated.specchietto || '');
+    }
+    return prev;
+});
+
+alert('✅ Dati aggiornati da Supabase!');
+return;
+        
+     
     } catch (err) {
         alert('Errore di connessione nel refresh: ' + err.message);
     }
 };
+
 
             const deleteSelected = async () => {
   if (!selectedSaveId) { alert('Seleziona un salvataggio da eliminare.'); return; }
@@ -776,16 +781,15 @@ const previous = rows;
 
     // 2) Salvataggio anche su Supabase (tabella: ritiri)
     // Prima svuotiamo la tabella (opzionale: mantieni solo l'ultima "fotografia")
-    // BLOCCO DISATTIVATO: non cancelliamo più tutta la tabella ritiri
-// const { error: deleteError } = await dbClient
-//   .from('ritiri')
-//   .delete()
-//   .neq('id', 0)
+    const { error: deleteError } = await dbClient
+      .from('ritiri')
+      .delete()
+      .neq('id', 0); // trucco per cancellare tutte le righe
 
-// if (deleteError) {
-//   alert('Ritiri salvati in locale, ma errore nel pulire la tabella ritiri: ' + deleteError.message)
-//   return
-// }
+    if (deleteError) {
+      alert('Ritiri salvati in locale, ma errore nel pulire la tabella ritiri: ' + deleteError.message);
+      return;
+    }
 
     // Prepariamo i dati da inserire
     const payload = rows.map(r => ({
@@ -800,14 +804,14 @@ const previous = rows;
 
 
     if (payload.length > 0) {
-   const { error: insertError } = await dbClient
-  .from('ritiri')
-  .upsert(payload, { onConflict: 'codice_cliente,n_pallet' })
+      const { error: insertError } = await dbClient
+        .from('ritiri')
+        .insert(payload);
 
-if (insertError) {
-  alert('Errore nel salvataggio su database: ' + insertError.message)
-  return
-}
+      if (insertError) {
+        alert('Ritiri salvati in locale, ma errore nel salvataggio su database: ' + insertError.message);
+        return;
+      }
     }
 
     // 3) Notifica per Ufficio: SOLO se l'utente attuale è "ritirista"
@@ -1232,7 +1236,7 @@ return () => {
 }, [currentEmail]);
   // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
   useEffect(() => {
-    const intervalId = setInterval(loadNotifications, 120000);
+    const intervalId = setInterval(loadNotifications, 30000);
     const handleVisibility = () => {
   if (document.visibilityState === 'visible') {
     loadNotifications();
