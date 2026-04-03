@@ -781,15 +781,16 @@ const previous = rows;
 
     // 2) Salvataggio anche su Supabase (tabella: ritiri)
     // Prima svuotiamo la tabella (opzionale: mantieni solo l'ultima "fotografia")
-    const { error: deleteError } = await dbClient
-      .from('ritiri')
-      .delete()
-      .neq('id', 0); // trucco per cancellare tutte le righe
+    // BLOCCO DISATTIVATO: non cancelliamo più tutta la tabella ritiri
+// const { error: deleteError } = await dbClient
+//   .from('ritiri')
+//   .delete()
+//   .neq('id', 0)
 
-    if (deleteError) {
-      alert('Ritiri salvati in locale, ma errore nel pulire la tabella ritiri: ' + deleteError.message);
-      return;
-    }
+// if (deleteError) {
+//   alert('Ritiri salvati in locale, ma errore nel pulire la tabella ritiri: ' + deleteError.message)
+//   return
+// }
 
     // Prepariamo i dati da inserire
     const payload = rows.map(r => ({
@@ -804,14 +805,14 @@ const previous = rows;
 
 
     if (payload.length > 0) {
-      const { error: insertError } = await dbClient
-        .from('ritiri')
-        .insert(payload);
+   const { error: insertError } = await dbClient
+  .from('ritiri')
+  .upsert(payload, { onConflict: 'codice_cliente,n_pallet' })
 
-      if (insertError) {
-        alert('Ritiri salvati in locale, ma errore nel salvataggio su database: ' + insertError.message);
-        return;
-      }
+if (insertError) {
+  alert('Errore nel salvataggio su database: ' + insertError.message)
+  return
+}
     }
 
     // 3) Notifica per Ufficio: SOLO se l'utente attuale è "ritirista"
@@ -1236,7 +1237,7 @@ return () => {
 }, [currentEmail]);
   // 🔔 Ping + visibilitychange per notifiche sempre aggiornate
   useEffect(() => {
-    const intervalId = setInterval(loadNotifications, 30000);
+    const intervalId = setInterval(loadNotifications, 120000);
     const handleVisibility = () => {
   if (document.visibilityState === 'visible') {
     loadNotifications();
