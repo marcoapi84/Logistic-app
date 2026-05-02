@@ -1039,13 +1039,14 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
             );
         }
 
-        function HomeScreen({ goPallet, goRitiri }) {
+        function HomeScreen({ goOrdini, goPallet, goRitiri }) {
             return (
                 <div className="min-h-80vh flex flex-col items-center justify-center gap-6 text-center">
                     <div className="text-blue-900">
                         <div className="text-3xl md:text-4xl font-extrabold">Logistica Dmg Italia/Italdevice</div>
                     </div>
                     <div className="flex flex-col md:flex-row gap-4">
+					    <button className="h-14 px-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow font-semibold" onClick={goOrdini}>📋 Ordini</button>
                         <button className="h-14 px-8 rounded-xl bg-blue-700 hover:bg-blue-800 text-white shadow font-semibold" onClick={goPallet}>📦 Pallettizzazione</button>
                         <button className="h-14 px-8 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white shadow font-semibold" onClick={goRitiri}>🚚 Ritiri</button>
                     </div>
