@@ -1057,15 +1057,16 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
             <div className="space-y-2">
                {row.prodotti.map((p, i) => {
     const codice = (p && typeof p === 'object') ? (p.codice ?? p.CODICE ?? '') : '';
-    const descrizione = (p && typeof p === 'object') ? (p.descrizione ?? p.DESCRIZIONE ?? '') : '';
-    const lotto = (p && typeof p === 'object') ? (p.lotto ?? p.LOTTO ?? '') : '';
-    const pezzi = (p && typeof p === 'object') ? (p.pezziTotaliProdotto ?? p.pezziTotali ?? p.pezzi ?? p.PEZZI_TOTALI_PRODOTTO ?? '') : '';
+const descrizione = (p && typeof p === 'object') ? (p.descrizione ?? p.DESCRIZIONE ?? '') : '';
+const lotto = (p && typeof p === 'object') ? (p.lotto ?? p.LOTTO ?? '') : '';
+const pezzi = (p && typeof p === 'object') ? (p.pezziTotaliProdotto ?? p.pezziTotali ?? p.pezzi ?? p.PEZZI_TOTALI_PRODOTTO ?? '') : '';
+const note = (p && typeof p === 'object') ? (p.note ?? p.NOTE ?? '') : '';
 
-    const updateProdotto = (campo, valore) => {
-        const nuoviProdotti = [...row.prodotti];
-        const base = (nuoviProdotti[i] && typeof nuoviProdotti[i] === 'object')
-            ? { ...nuoviProdotti[i] }
-            : { codice: '', descrizione: '', lotto: '', pezziTotaliProdotto: '' };
+const updateProdotto = (campo, valore) => {
+    const nuoviProdotti = [...row.prodotti];
+    const base = (nuoviProdotti[i] && typeof nuoviProdotti[i] === 'object')
+        ? { ...nuoviProdotti[i] }
+        : { codice: '', descrizione: '', lotto: '', pezziTotaliProdotto: '', note: '' };
 
         base[campo] = valore;
         nuoviProdotti[i] = base;
@@ -1075,7 +1076,7 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
 
                     return (
                         <div key={i} className="border border-yellow-200 rounded bg-yellow-100 p-2">
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                           <div className="grid grid-cols-5 gap-1">
                                 <div>
                                     <div className="font-semibold mb-1">CODICE</div>
                                     <input
@@ -1116,6 +1117,16 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
                                         disabled={row.completato}
                                     />
                                 </div>
+								<div>
+    <div className="font-semibold mb-1">NOTE</div>
+    <input
+        type="text"
+        className="w-full h-8 border rounded px-2 text-xs"
+        value={note}
+        onChange={(e) => updateProdotto('note', e.target.value)}
+        disabled={row.completato}
+    />
+</div>
                             </div>
                         </div>
                     );
