@@ -1143,7 +1143,199 @@ const updateProdotto = (campo, valore) => {
                 </div>
             );
         }
+function BlacklistApp({ goHome, userRole }) {
+  const [cliente, setCliente] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [note, setNote] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  const loadBlacklist = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await dbClient
+        .from("blacklist_clienti")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        alert("Errore caricamento blacklist: " + error.message);
+      } else {
+        setItems(data || []);
+      }
+    } catch (err) {
+      alert("Errore connessione blacklist: " + err.message);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadBlacklist();
+  }, []);
+
+  const salvaBlacklist = async () => {
+    if (!cliente.trim()) {
+      alert("Inserisci il cliente.");
+      return;
+    }
+    if (!motivo.trim()) {
+      alert("Inserisci il motivo.");
+      return;
+    }
+
+    try {
+      const { error } = await dbClient
+        .from("blacklist_clienti")
+        .insert([
+          {
+            cliente: cliente.trim(),
+            motivo: motivo.trim(),
+            note: note.trim()
+          }
+        ]);
+
+      if (error) {
+        alert("Errore salvataggio blacklist: " + error.message);
+        return;
+      }
+
+      setCliente("");
+      setMotivo("");
+      setNote("");
+      await loadBlacklist();
+      alert("Cliente aggiunto in blacklist.");
+    } catch (err) {
+      alert("Errore connessione blacklist: " + err.message);
+    }
+  };
+
+  const eliminaVoce = async (id) => {
+    const ok = window.confirm("Vuoi eliminare questa voce dalla blacklist?");
+    if (!ok) return;
+
+    try {
+      const { error } = await dbClient
+        .from("blacklist_clienti")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        alert("Errore eliminazione blacklist: " + error.message);
+        return;
+      }
+
+      await loadBlacklist();
+      alert("Voce eliminata.");
+    } catch (err) {
+      alert("Errore connessione blacklist: " + err.message);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="text-center">
+        <h1 className="text-2xl md:text-3xl font-extrabold text-red-900">Blacklist Clienti</h1>
+        <div className="text-sm text-red-900/70">Clienti che in passato hanno creato problemi</div>
+      </div>
+
+      <div className="bg-white/80 border border-red-200 rounded-xl p-4 shadow-sm space-y-3">
+        <div>
+          <div className="text-sm font-semibold text-red-900 mb-1">Cliente</div>
+          <TextCell
+            value={cliente}
+            onChange={setCliente}
+            placeholder="Inserisci nome cliente"
+          />
+        </div>
+
+        <div>
+          <div className="text-sm font-semibold text-red-900 mb-1">Motivo</div>
+          <TextCell
+            value={motivo}
+            onChange={setMotivo}
+            placeholder="Es. contestazioni, ritardi, problemi pagamento"
+          />
+        </div>
+
+        <div>
+          <div className="text-sm font-semibold text-red-900 mb-1">Note</div>
+          <textarea
+            className="w-full p-2 border rounded text-sm"
+            rows="3"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note facoltative"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="h-10 px-4 rounded bg-red-600 text-white shadow hover:bg-red-700 font-medium"
+            onClick={salvaBlacklist}
+          >
+            Salva
+          </button>
+
+          <button
+            className="h-10 px-4 rounded bg-sky-600 text-white shadow hover:bg-sky-700 font-medium"
+            onClick={loadBlacklist}
+          >
+            Refresh
+          </button>
+
+          <button
+            className="h-10 px-4 rounded bg-slate-700 text-white shadow hover:bg-slate-800 font-medium"
+            onClick={goHome}
+          >
+            Home
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-xl border border-red-100 overflow-x-auto">
+        <table className="table w-full text-sm">
+          <thead>
+            <tr>
+              <th className="text-left">Cliente</th>
+              <th className="text-left">Motivo</th>
+              <th className="text-left">Note</th>
+              <th className="text-left">Data inserimento</th>
+              <th className="text-center">Azione</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan="5" className="text-center py-4">Caricamento...</td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="text-center py-4 text-gray-500">Nessun cliente in blacklist.</td>
+              </tr>
+            ) : (
+              items.map((item) => (
+                <tr key={item.id} className="hover:bg-red-50/40">
+                  <td>{item.cliente}</td>
+                  <td>{item.motivo}</td>
+                  <td>{item.note || ""}</td>
+                  <td>{item.created_at ? new Date(item.created_at).toLocaleString("it-IT") : ""}</td>
+                  <td className="text-center">
+                    <button
+                      className="h-8 px-3 rounded bg-red-600 text-white shadow hover:bg-red-700"
+                      onClick={() => eliminaVoce(item.id)}
+                    >
+                      Elimina
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
         function HomeScreen({ goBlacklist, goPallet, goRitiri }) {
             return (
                 <div className="min-h-80vh flex flex-col items-center justify-center gap-6 text-center">
@@ -1474,11 +1666,45 @@ colore_ritiro: JSON.stringify(prodottiList)
   };
 
   // Wrapper per avere l'icona notifiche sempre visibile
-  const content = (() => {
-    if (screen === 'home') return <HomeScreen goPallet={() => setScreen('pallet')} goRitiri={() => setScreen('ritiri')} />;
-    if (screen === 'ritiri') return <RitiriApp rows={ritiriRows} setRows={setRitiriRows} goHome={() => setScreen('home')} userRole={userRole} />;
-    return <PallettizzazioneApp onSendToRitiri={handleSendToRitiri} goHome={() => { setScreen('home'); }} userRole={userRole} />;
-  })();
+const content = (() => {
+  if (screen === 'home') {
+    return (
+      <HomeScreen
+        goBlacklist={() => setScreen('blacklist')}
+        goPallet={() => setScreen('pallet')}
+        goRitiri={() => setScreen('ritiri')}
+      />
+    );
+  }
+
+  if (screen === 'blacklist') {
+    return (
+      <BlacklistApp
+        goHome={() => setScreen('home')}
+        userRole={userRole}
+      />
+    );
+  }
+
+  if (screen === 'ritiri') {
+    return (
+      <RitiriApp
+        rows={ritiriRows}
+        setRows={setRitiriRows}
+        goHome={() => setScreen('home')}
+        userRole={userRole}
+      />
+    );
+  }
+
+  return (
+    <PallettizzazioneApp
+      onSendToRitiri={handleSendToRitiri}
+      goHome={() => setScreen('home')}
+      userRole={userRole}
+    />
+  );
+})();
 
   return (
     <div className="relative">
