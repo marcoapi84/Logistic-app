@@ -702,8 +702,18 @@ return;
                                 disabled={!palletConclusa} onClick={async () => {
 const palletNum = computed.totals ? computed.totals.pedane : 0;
 const prodottiList = products
-    .filter(p => p.descrizione && p.descrizione.trim() !== '')
-    .map(p => p.descrizione.trim());
+  .filter(p =>
+    (p.codice && p.codice.trim() !== '') ||
+    (p.descrizione && p.descrizione.trim() !== '') ||
+    (p.lotto && p.lotto.trim() !== '')
+  )
+  .map(p => ({
+    codice: (p.codice || '').trim(),
+    descrizione: (p.descrizione || '').trim(),
+    lotto: (p.lotto || '').trim(),
+    pezziTotaliProdotto: p.pzTotaliProdotto ?? '',
+    note: (p.noteRiga || '').trim()
+  }))
 onSendToRitiri(cliente.trim(), palletNum, selectedSaveId, prodottiList);
 									try { await dbClient.from('pallettizzazioni').update({ inviato_a_ritiri: true }).eq('codice_cliente', cliente.trim()); } catch (e) { console.error('update inviato_a_ritiri failed', e); }
 									setSavedItems(prev => prev.filter(x => x.name.toLowerCase() !== cliente.trim().toLowerCase()));
@@ -993,48 +1003,128 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
                                     <th className="text-center w-2"></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                 <tbody>
                                 {sortedRows.map(row => (
-                                    <tr key={row.id} className="hover:bg-blue-50/40" style={row.completato ? { backgroundColor: '#f3f4f6' } : {}}>
-                                        <td>
-  <div className="flex items-center gap-1 relative">
-    <input type="text" className="w-full h-9 border rounded px-2 text-sm bg-gray-100" value={row.cliente} readOnly disabled={row.completato} />
-    {row.prodotti && row.prodotti.length > 0 && (
-      <button onClick={() => setOpenProdottiId(openProdottiId === row.id ? null : row.id)}
-        className="text-blue-600 hover:text-blue-800 text-base px-1" title="Mostra prodotti">👁️</button>
-    )}
-    {openProdottiId === row.id && (
-      <div className="absolute top-10 left-0 z-50 bg-white border border-blue-200 rounded-lg shadow-lg p-3 min-w-48">
-        <div className="text-xs font-semibold text-blue-900 mb-2">📦 Prodotti:</div>
-        {row.prodotti.map((p, i) => (
-          <div key={i} className="text-xs text-gray-700 py-0.5">• {p}</div>
-        ))}
-      </div>
-    )}
-  </div>
-</td>
-                                        <td><input type="text" className="w-full h-9 border rounded px-2 text-sm text-center bg-gray-100" value={row.pallet} readOnly disabled={row.completato} /></td>
-                                        <td className="text-center">
-                                            <input type="date" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly}
-                                                   value={row.giornoRitiro} onChange={e => { updateRow(row.id, { giornoRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
-                                        </td>
-                                        <td>
-  <div className="flex items-center gap-1">
-    <input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.dettaglioRitiro} onChange={e => { updateRow(row.id, { dettaglioRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
-    {sortedRows.filter(r => r.id !== row.id && r.dettaglioRitiro && r.dettaglioRitiro.trim() !== '' && r.dettaglioRitiro.trim() === row.dettaglioRitiro.trim() && r.giornoRitiro === row.giornoRitiro).length > 0 && (
-      <span title="Stesso mezzo di un altro ritiro" style={{fontSize:'16px', cursor:'default'}}>🔗</span>
-    )}
-  </div>
-</td>
-                                        <td><input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.note} onChange={e => { updateRow(row.id, { note: e.target.value }); setHasUnsavedChanges(true); }} /></td>
-                                        <td className="text-center">
-                                            <input type="checkbox" className="h-5 w-5" checked={!!row.completato}
+                                    <React.Fragment key={row.id}>
+                                        <tr className="hover:bg-blue-50/40" style={row.completato ? { backgroundColor: '#f3f4f6' } : {}}>
+                                            <td>
+                                                <div className="flex items-center gap-1 relative">
+                                                    <input
+                                                        type="text"
+                                                        className="w-full h-9 border rounded px-2 text-sm bg-gray-100"
+                                                        value={row.cliente}
+                                                        readOnly
+                                                        disabled={row.completato}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td><input type="text" className="w-full h-9 border rounded px-2 text-sm text-center bg-gray-100" value={row.pallet} readOnly disabled={row.completato} /></td>
+                                            <td className="text-center">
+                                                <input type="date" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly}
+                                                       value={row.giornoRitiro} onChange={e => { updateRow(row.id, { giornoRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
+                                            </td>
+                                            <td>
+                                                <div className="flex items-center gap-1">
+                                                    <input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.dettaglioRitiro} onChange={e => { updateRow(row.id, { dettaglioRitiro: e.target.value }); setHasUnsavedChanges(true); }} />
+                                                    {sortedRows.filter(r => r.id !== row.id && r.dettaglioRitiro && r.dettaglioRitiro.trim() !== '' && r.dettaglioRitiro.trim() === row.dettaglioRitiro.trim() && r.giornoRitiro === row.giornoRitiro).length > 0 && (
+                                                        <span title="Stesso mezzo di un altro ritiro" style={{fontSize:'16px', cursor:'default'}}>🔗</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td><input type="text" className="w-full h-9 border rounded px-2 text-sm" autoComplete="off" disabled={row.completato || isReadOnly} value={row.note} onChange={e => { updateRow(row.id, { note: e.target.value }); setHasUnsavedChanges(true); }} /></td>
+                                            <td className="text-center">
+                                                <input type="checkbox" className="h-5 w-5" checked={!!row.completato}
        onChange={e => updateRow(row.id, { completato: e.target.checked })} disabled={isReadOnly} />
-                                        </td>
-                                        <td className="text-center">
-                                            <button className="h-9 px-2 rounded text-white shadow bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => removeRow(row.id)} disabled={isReadOnly} title="Elimina riga">×</button>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                           <td className="text-center">
+    <div className="flex items-center justify-center gap-2">
+        <button
+            className="h-9 w-9 rounded bg-blue-600 text-white shadow hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => setOpenProdottiId(openProdottiId === row.id ? null : row.id)}
+            disabled={isReadOnly || !Array.isArray(row.prodotti) || row.prodotti.length === 0}
+            title="Mostra/Nascondi dettaglio merce"
+        >
+            {openProdottiId === row.id ? '−' : '+'}
+        </button>
+        <button className="h-9 px-2 rounded text-white shadow bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => removeRow(row.id)} disabled={isReadOnly} title="Elimina riga">×</button>
+    </div>
+</td>
+                                        </tr>
+
+                                       {openProdottiId === row.id && Array.isArray(row.prodotti) && row.prodotti.length > 0 && (
+    <tr style={row.completato ? { backgroundColor: '#fef3c7' } : { backgroundColor: '#fef9c3' }}>
+        <td colSpan="7" className="px-3 py-2 text-xs text-gray-800">
+            <div className="space-y-2">
+               {row.prodotti.map((p, i) => {
+    const codice = (p && typeof p === 'object') ? (p.codice ?? p.CODICE ?? '') : '';
+    const descrizione = (p && typeof p === 'object') ? (p.descrizione ?? p.DESCRIZIONE ?? '') : '';
+    const lotto = (p && typeof p === 'object') ? (p.lotto ?? p.LOTTO ?? '') : '';
+    const pezzi = (p && typeof p === 'object') ? (p.pezziTotaliProdotto ?? p.pezziTotali ?? p.pezzi ?? p.PEZZI_TOTALI_PRODOTTO ?? '') : '';
+
+    const updateProdotto = (campo, valore) => {
+        const nuoviProdotti = [...row.prodotti];
+        const base = (nuoviProdotti[i] && typeof nuoviProdotti[i] === 'object')
+            ? { ...nuoviProdotti[i] }
+            : { codice: '', descrizione: '', lotto: '', pezziTotaliProdotto: '' };
+
+        base[campo] = valore;
+        nuoviProdotti[i] = base;
+        updateRow(row.id, { prodotti: nuoviProdotti });
+        setHasUnsavedChanges(true);
+    };
+
+                    return (
+                        <div key={i} className="border border-yellow-200 rounded bg-yellow-100 p-2">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                <div>
+                                    <div className="font-semibold mb-1">CODICE</div>
+                                    <input
+                                        type="text"
+                                        className="w-full h-8 border rounded px-2 text-xs"
+                                        value={codice}
+                                        onChange={(e) => updateProdotto('codice', e.target.value)}
+                                        disabled={row.completato}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="font-semibold mb-1">DESCRIZIONE</div>
+                                    <input
+                                        type="text"
+                                        className="w-full h-8 border rounded px-2 text-xs"
+                                        value={descrizione}
+                                        onChange={(e) => updateProdotto('descrizione', e.target.value)}
+                                        disabled={row.completato}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="font-semibold mb-1">NUMERO LOTTO</div>
+                                    <input
+                                        type="text"
+                                        className="w-full h-8 border rounded px-2 text-xs"
+                                        value={lotto}
+                                        onChange={(e) => updateProdotto('lotto', e.target.value)}
+                                        disabled={row.completato}
+                                    />
+                                </div>
+                                <div>
+                                    <div className="font-semibold mb-1">PEZZI</div>
+                                    <input
+                                        type="text"
+                                        className="w-full h-8 border rounded px-2 text-xs"
+                                        value={pezzi}
+                                        onChange={(e) => updateProdotto('pezziTotaliProdotto', e.target.value)}
+                                        disabled={row.completato}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </td>
+    </tr>
+                                        )}
+                                    </React.Fragment>
                                 ))}
                             </tbody>
                         </table>
