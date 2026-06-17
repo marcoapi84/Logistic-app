@@ -833,7 +833,7 @@ try {
   fromEmail = data?.session?.user?.email ?? 'unknown';
 } catch(e) { console.error('Errore getSession in handleSalvaRitiri', e); }
 
-const role = getRoleFromEmail(fromEmail);
+const role = window.getRoleFromEmail(fromEmail);
 
 if (role === 'ritirista' || role === 'ufficio') {
   const now = new Date();
@@ -1406,7 +1406,7 @@ useEffect(() => {
       const email = data?.session?.user?.email || '';
      setCurrentEmail(email);
       setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
-      setUserRole(getRoleFromEmail(email));
+      setUserRole(window.getRoleFromEmail(email));
       loadNotifications(email);
     } catch (e) {
       console.error('Errore getSession (catch):', e);
@@ -1420,7 +1420,7 @@ useEffect(() => {
     const email = session?.user?.email || '';
     setCurrentEmail(email);
     setIsUfficio((email || '').toLowerCase() === UFFICIO_EMAIL);
-    setUserRole(getRoleFromEmail(email));
+    setUserRole(window.getRoleFromEmail(email));
     loadNotifications(email);
   });
   return () => {
@@ -1850,7 +1850,7 @@ setTimeout(() => {
       alert('✅ Benvenuto ' + data.user.email);
       localStorage.setItem('user_logged', 'true');
       localStorage.setItem('user_email', data.user.email);
-      const userRole = getRoleFromEmail(data.user.email);
+      const userRole = window.getRoleFromEmail(data.user.email);
 localStorage.setItem('userrole', userRole);
 window.location.reload();
 
