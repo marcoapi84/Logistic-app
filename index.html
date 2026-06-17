@@ -1828,43 +1828,37 @@ setTimeout(() => {
     };
 
     // Login
-    document.getElementById('btn-login').onclick = async () => {
-      const email = document.getElementById('email-login').value.trim();
-      const password = document.getElementById('password-login').value;
+document.getElementById('btn-login').onclick = async () => {
+  const email = document.getElementById('email-login').value.trim();
+  const password = document.getElementById('password-login').value;
 
-      if (!email || !password) {
-        alert('❌ Inserisci email e password!');
-        return;
-      }
+  if (!email || !password) {
+    alert('❌ Inserisci email e password!');
+    return;
+  }
 
-      const { data, error } = await dbClient.auth.signInWithPassword({
-        email, password
-      });
+  const { data, error } = await dbClient.auth.signInWithPassword({
+    email, password
+  });
 
-      if (error) {
-        alert('❌ ' + error.message);
-        return;
-      }
+  if (error) {
+    alert('❌ ' + error.message);
+    return;
+  }
 
-      // Login riuscito
-      alert('✅ Benvenuto ' + data.user.email);
-      localStorage.setItem('user_logged', 'true');
-      localStorage.setItem('user_email', data.user.email);
-      const userRole = window.getRoleFromEmail(data.user.email);
-localStorage.setItem('userrole', userRole);
-window.location.reload();
+  alert('✅ Benvenuto ' + data.user.email);
+  localStorage.setItem('user_logged', 'true');
+  localStorage.setItem('user_email', data.user.email);
 
-      // Aggiorna interfaccia
-      document.getElementById('email-login').style.display = 'none';
-      document.getElementById('password-login').style.display = 'none';
-      document.getElementById('btn-login').style.display = 'none';
-      document.getElementById('btn-logout').style.display = 'block';
-      document.getElementById('user-info').style.display = 'block';
-      document.getElementById('user-info').textContent = '👤 ' + data.user.email;
+  const userRole =
+    data.user.email === 'admin@clienti.it' ? 'admin' :
+    (data.user.email === 'ufficio@magazzino.it' || data.user.email === 'alice@magazzino.it') ? 'ufficio' :
+    (data.user.email === 'marco@clienti.it' || data.user.email === 'stefano@clienti.it' || data.user.email === 'serena@clienti.it' || data.user.email === 'beatrice@clienti.it') ? 'ritirista' :
+    'operatore';
 
-      // Ricarica la pagina per inizializzare l'app
-      location.reload();
-    };
+  localStorage.setItem('userrole', userRole);
+  window.location.reload();
+};
 
     // Logout
     document.getElementById('btn-logout').onclick = async () => {
