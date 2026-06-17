@@ -1753,7 +1753,7 @@ const content = (() => {
 // 🔒 BLOCCO senza login
 if (!localStorage.getItem('user_logged')) {
   const loginHtml = document.getElementById('login-container')?.outerHTML || '';
-  document.body.innerHTML = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:40px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);text-align:center;z-index:10;">
+  // document.body.innerHTML = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:40px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3);text-align:center;z-index:10;">
     <div style="margin:0 0 14px 0;color:#1e3a8a;font-size:28px;font-weight:800;">Logistic-app</div>
     <h2 style="color:#1e3a8a;">🔒 Login Obbligatorio</h2>
     <p>Accedi per usare l'app.</p>
@@ -1762,7 +1762,9 @@ if (!localStorage.getItem('user_logged')) {
 }
 
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const rootEl = document.getElementById('root');
+if (!rootEl) alert('ERRORE: root non trovato');
+const root = ReactDOM.createRoot(rootEl);
         root.render(<App />);
 		
     </script>
@@ -1850,7 +1852,7 @@ document.getElementById('btn-login').onclick = async () => {
     'operatore';
 
   localStorage.setItem('userrole', userRole);
-  window.location.reload();
+  // window.location.reload()
 };
 
     // Logout
