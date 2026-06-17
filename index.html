@@ -28,12 +28,14 @@
         #root { position: relative; z-index: 1; }
         @media print { .no-print { display: none !important; } }
     </style>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-   <!-- <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script> -->
+    <!-- React 18 (production builds: più veloci e leggeri di ~10x rispetto a development) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+    <!-- Babel standalone: necessario per compilare il JSX di <script type="text/babel"> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<!-- Libreria Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Libreria Supabase (versione pinnata per stabilità) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1a2a4a">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -1336,6 +1338,7 @@ function BlacklistApp({ goHome, userRole }) {
     </div>
   );
 }
+window.__test_before_home = true; 
         function HomeScreen({ goBlacklist, goPallet, goRitiri }) {
             return (
                 <div className="min-h-80vh flex flex-col items-center justify-center gap-6 text-center">
