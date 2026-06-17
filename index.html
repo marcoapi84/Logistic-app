@@ -1350,13 +1350,13 @@ function BlacklistApp({ goHome, userRole }) {
                 </div>
             );
         }
-function getRoleFromEmail(email) {
+window.getRoleFromEmail = function(email) {
 const e = (email || '').toLowerCase();
 if (e === 'admin@clienti.it') return 'admin';
 if (e === 'ufficio@magazzino.it' || e === 'alice@magazzino.it') return 'ufficio';
 if (e === 'marco@clienti.it' || e === 'stefano@clienti.it' || e === 'serena@clienti.it' || e === 'beatrice@clienti.it') return 'ritirista';
 return 'operatore';
-}
+};
     function App() {
   const [screen, setScreen] = React.useState('home');
  const [userRole, setUserRole] = React.useState('operatore');
