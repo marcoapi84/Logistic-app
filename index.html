@@ -1762,17 +1762,7 @@ if (!localStorage.getItem('user_logged')) {
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-		// Pulizia: se per errore resta un carattere "<" o ">" come testo nel body, lo rimuoviamo
-setTimeout(() => {
-  try {
-    const nodes = Array.from(document.body.childNodes);
-    nodes.forEach((n) => {
-      if (n.nodeType === Node.TEXT_NODE && (n.textContent || '').trim().match(/^[<>]$/)) {
-        n.remove();
-      }
-    });
-  } catch (e) {}
-}, 0);
+		
     </script>
 <script>
   // Configurazione Supabase
