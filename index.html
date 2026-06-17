@@ -1756,6 +1756,8 @@ const content = (() => {
         const rootEl = document.getElementById('root');
 if (!rootEl) alert('ERRORE: root non trovato');
 const root = ReactDOM.createRoot(rootEl);
+window.App = App;
+window.getRoleFromEmail = window.getRoleFromEmail;
         root.render(<App />);
 		
     </script>
