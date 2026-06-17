@@ -48,7 +48,7 @@
 <body class="min-h-screen bg-gradient-to-b from-blue-300 to-green-500 p-4 bg-watermark">
     <div id="root" class="max-w-full mx-auto"></div>
 
-    <script type="text/babel">
+    <script type="text/javascript">
         const { useEffect, useMemo, useState } = React;
 
         function TextCell({ value, onChange, placeholder, disabled = false }) {
@@ -576,9 +576,7 @@ return;
                                 <select className="h-9 border rounded px-2 text-sm w-full md:w-80" value={selectedSaveId}
                                         onChange={e => setSelectedSaveId(e.target.value)}>
                                     <option value="">-- Seleziona un salvataggio --</option>
-                                    {[...savedItems]
-  .sort((a, b) => (a.name || "").localeCompare(b.name || "", "it", { sensitivity: "base" }))
-  .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    {savedItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                                 <div className="flex flex-wrap gap-2">
                                     <button className="h-9 px-3 rounded bg-emerald-600 text-white shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={saveOverwrite} disabled={isReadOnly}>Salva/sovrascrivi</button>
@@ -985,7 +983,7 @@ prodotti: (() => { try { return JSON.parse(row.colore_ritiro || '[]'); } catch(e
     <button className="h-10 px-4 rounded bg-green-600 text-white shadow hover:bg-green-700 font-medium" onClick={handleSalvaRitiri}>💾 Salva</button>
     <button className="h-10 px-4 rounded bg-sky-600 text-white shadow hover:bg-sky-700 font-medium" onClick={refreshRitiri}>🔄 Refresh</button>
 	<span className="text-lg font-semibold text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-    Non mettete più di 3 ritiri al giorno che Alice si incazza, chiedere prima
+    Prima di fare una modifica e salvare fare sempre Refresh. E ricordatevi che mancano meno di tre mesi alle ferie
   </span>
 </div>
 
