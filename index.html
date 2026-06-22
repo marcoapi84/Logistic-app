@@ -578,7 +578,9 @@ return;
                                 <select className="h-9 border rounded px-2 text-sm w-full md:w-80" value={selectedSaveId}
                                         onChange={e => setSelectedSaveId(e.target.value)}>
                                     <option value="">-- Seleziona un salvataggio --</option>
-                                    {savedItems.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                    {[...savedItems]
+  .sort((a, b) => (a.name || "").localeCompare(b.name || "", "it", { sensitivity: "base" }))
+  .map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                                 <div className="flex flex-wrap gap-2">
                                     <button className="h-9 px-3 rounded bg-emerald-600 text-white shadow hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={saveOverwrite} disabled={isReadOnly}>Salva/sovrascrivi</button>
